@@ -1,12 +1,12 @@
 # RouteFluent sing-box
 
-Controlled sing-box build used by RouteFluent when a route explicitly requires the AnyTLS outbound `client` field.
+Controlled sing-box build used by RouteFluent when a route explicitly requires the AnyTLS outbound `client` field or RouteFluent's provider-scoped DNS resolver group.
 
 This repository does not maintain a broad sing-box fork. It is a deterministic build wrapper that:
 
 1. clones exact upstream sources,
 2. verifies exact commits,
-3. applies a narrow AnyTLS client-field patch,
+3. applies narrow RouteFluent patches,
 4. builds a Linux amd64 binary,
 5. writes a machine-readable build manifest,
 6. publishes release assets through GitHub Actions.
@@ -17,14 +17,14 @@ This repository does not maintain a broad sing-box fork. It is a deterministic b
 | --- | --- |
 | sing-box | `v1.13.12` / `1086ab2563320e0da0c23b3a491d8dfa0939dff4` |
 | sing-anytls | `v0.0.11` / `130d2e61b8895727bfed4942c535e91b246a9603` |
-| RouteFluent patch id | `routefluent-anytls-client-config-v1` |
-| Version name | `1.13.12-routefluent-anytls-client.3` |
+| RouteFluent patch id | `routefluent-anytls-client-dns-resolver-group-v1` |
+| Version name | `1.13.12-routefluent-anytls-client.4` |
 | Default tags | `with_utls with_clash_api` |
 | Target | `linux/amd64`, `CGO_ENABLED=0` |
 
 ## Patch Scope
 
-The patch only exposes sing-anytls' client broadcast value through sing-box AnyTLS outbound config:
+The first patch exposes sing-anytls' client broadcast value through sing-box AnyTLS outbound config:
 
 ```json
 {
@@ -47,9 +47,20 @@ sing_box_anytls_client=ok:client_field
 
 after its installed binary passes `sing-box check -c` with an AnyTLS outbound containing the `client` field. Stock sing-box must not report this capability.
 
-## Planned DNS Resolution Work
+The second patch adds a RouteFluent DNS server type:
 
-The next sing-box patch is documented in `docs/doh-priority-local-fallback-resolution.md`. It defines provider-scoped outbound server resolution where configured DoH resolvers are preferred, local host DNS is allowed only as a temporary fallback when every DoH resolver in that group is unavailable, and recovered DoH resolvers automatically become preferred again.
+```json
+{
+  "tag": "rf-resolver-vendor-a",
+  "type": "routefluent_resolver_group",
+  "primary": ["vendor-a-doh"],
+  "fallback": "local-system",
+  "fallback_enabled": true,
+  "probe_domains": ["www.gstatic.com", "cloudflare.com"]
+}
+```
+
+It is documented in `docs/doh-priority-local-fallback-resolution.md`. The behavior is provider-scoped: configured DoH resolvers are preferred, local host DNS is allowed only as a temporary fallback when every DoH resolver in that group is unavailable, and recovered DoH resolvers automatically become preferred again. A `local_only` mode exists for providers that do not carry DoH.
 
 ## Local Build
 
@@ -77,12 +88,13 @@ Smoke check:
 ```bash
 ./dist/sing-box-linux-amd64 version
 ./dist/sing-box-linux-amd64 check -c testdata/anytls-client-check.json
+./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-resolver-group-check.json
 ```
 
 Expected version string includes:
 
 ```text
-1.13.12-routefluent-anytls-client.3
+1.13.12-routefluent-anytls-client.4
 ```
 
 ## GitHub Release
@@ -103,8 +115,8 @@ Tags matching `v*` then trigger the release workflow.
 Recommended tag:
 
 ```bash
-git tag v1.13.12-routefluent-anytls-client.3
-git push origin v1.13.12-routefluent-anytls-client.3
+git tag v1.13.12-routefluent-anytls-client.4
+git push origin v1.13.12-routefluent-anytls-client.4
 ```
 
 Release assets:
@@ -117,12 +129,15 @@ The first repository publication used an OAuth token without the `workflow` scop
 
 ## Use From Another Project
 
-Other projects should consume an immutable release or pin this repository as a submodule. Do not replace a stock sing-box binary with this build unless the target runtime explicitly requires and verifies `anytls_outbound_client_field`.
+Other projects should consume an immutable release or pin this repository as a submodule. Do not replace a stock sing-box binary with this build unless the target runtime explicitly requires and verifies at least one of these features:
+
+- `anytls_outbound_client_field`
+- `routefluent_dns_resolver_group`
 
 Release-binary mode:
 
 ```bash
-VERSION=v1.13.12-routefluent-anytls-client.3
+VERSION=v1.13.12-routefluent-anytls-client.4
 BASE=https://github.com/DavidYordan/routefluent-sing-box/releases/download/$VERSION
 
 curl -L -o sing-box-linux-amd64 "$BASE/sing-box-linux-amd64"
@@ -137,7 +152,7 @@ Pinned submodule mode:
 
 ```bash
 git submodule add https://github.com/DavidYordan/routefluent-sing-box.git third_party/routefluent-sing-box
-git -C third_party/routefluent-sing-box checkout v1.13.12-routefluent-anytls-client.3
+git -C third_party/routefluent-sing-box checkout v1.13.12-routefluent-anytls-client.4
 git add .gitmodules third_party/routefluent-sing-box
 ```
 
@@ -161,9 +176,12 @@ The RouteFluent build scripts pass explicit output and manifest paths, so the sa
 
 ## Compatibility Boundary
 
-This binary exists for one controlled case: providers whose AnyTLS servers reject stock sing-anytls' native client broadcast but accept `mihomo/1.19.28`.
+This binary exists for controlled RouteFluent runtime gaps that stock sing-box does not expose:
 
-It is not a subscription parser compatibility layer, not an automatic provider fallback, and not a data-plane failover mechanism. RouteFluent's compiler and deploy path remain fail-closed unless the route config explicitly chooses a non-native AnyTLS client mode and the target device reports the patched runtime capability.
+- providers whose AnyTLS servers reject stock sing-anytls' native client broadcast but accept `mihomo/1.19.28`;
+- outbound server-domain resolution that must prefer provider DoH, temporarily fall back to local DNS only when all DoH resolvers in that group are unavailable, and recover back to DoH.
+
+It is not a subscription parser compatibility layer, not an automatic provider fallback, and not a data-plane failover mechanism. RouteFluent's compiler and deploy path remain fail-closed unless the route config explicitly chooses a patched capability and the target device reports that capability.
 
 ## Upstream Licenses
 

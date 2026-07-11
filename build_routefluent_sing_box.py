@@ -26,9 +26,11 @@ SING_BOX_VERSION = "v1.13.12"
 SING_ANYTLS_VERSION = "v0.0.11"
 SING_BOX_COMMIT = "1086ab2563320e0da0c23b3a491d8dfa0939dff4"
 SING_ANYTLS_COMMIT = "130d2e61b8895727bfed4942c535e91b246a9603"
-PATCH_ID = "routefluent-anytls-client-config-v1"
+REPO_ROOT = Path(__file__).resolve().parent
+PATCH_ID = "routefluent-anytls-client-dns-resolver-group-v1"
 FEATURE_ANYTLS_CLIENT_FIELD = "anytls_outbound_client_field"
-PATCHED_SING_BOX_VERSION = "1.13.12-routefluent-anytls-client.3"
+FEATURE_ROUTEFLUENT_DNS_RESOLVER_GROUP = "routefluent_dns_resolver_group"
+PATCHED_SING_BOX_VERSION = "1.13.12-routefluent-anytls-client.4"
 DEFAULT_TAGS = "with_utls with_clash_api"
 
 
@@ -111,6 +113,15 @@ def replace_once(path: Path, old: str, new: str) -> None:
     path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 
+def copy_patch_file(source_dir: Path, relative_path: str) -> None:
+    source = REPO_ROOT / "patches" / "sing-box" / relative_path
+    if not source.is_file():
+        raise RuntimeError(f"patch source file not found: {source}")
+    target = source_dir / relative_path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source, target)
+
+
 def patch_sing_anytls(source_dir: Path) -> None:
     replace_once(
         source_dir / "client.go",
@@ -166,6 +177,64 @@ def patch_sing_anytls(source_dir: Path) -> None:
 
 def patch_sing_box(source_dir: Path) -> None:
     replace_once(
+        source_dir / "constant" / "dns.go",
+        '\tDNSTypeTailscale   = "tailscale"\n',
+        '\tDNSTypeTailscale                = "tailscale"\n\tDNSTypeRouteFluentResolverGroup = "routefluent_resolver_group"\n',
+    )
+    replace_once(
+        source_dir / "adapter" / "dns.go",
+        "type LegacyDNSTransport interface {\n\tLegacyStrategy() C.DomainStrategy\n",
+        "type DNSCacheControlTransport interface {\n\tDisableDNSCache() bool\n}\n\n"
+        "type LegacyDNSTransport interface {\n\tLegacyStrategy() C.DomainStrategy\n",
+    )
+    replace_once(
+        source_dir / "dns" / "client.go",
+        "\tdisableCache := !isSimpleRequest || c.disableCache || options.DisableCache\n\tif !disableCache {\n",
+        "\tdisableCache := !isSimpleRequest || c.disableCache || options.DisableCache\n"
+        "\tif cacheControlTransport, ok := transport.(adapter.DNSCacheControlTransport); ok && cacheControlTransport.DisableDNSCache() {\n"
+        "\t\tdisableCache = true\n"
+        "\t}\n"
+        "\tif !disableCache {\n",
+    )
+    replace_once(
+        source_dir / "dns" / "client.go",
+        "\tdisableCache := c.disableCache || options.DisableCache\n\tif !disableCache {\n",
+        "\tdisableCache := c.disableCache || options.DisableCache\n"
+        "\tif cacheControlTransport, ok := transport.(adapter.DNSCacheControlTransport); ok && cacheControlTransport.DisableDNSCache() {\n"
+        "\t\tdisableCache = true\n"
+        "\t}\n"
+        "\tif !disableCache {\n",
+    )
+    replace_once(
+        source_dir / "option" / "dns.go",
+        "type DHCPDNSServerOptions struct {\n\tLocalDNSServerOptions\n\tInterface string `json:\"interface,omitempty\"`\n}\n",
+        "type DHCPDNSServerOptions struct {\n\tLocalDNSServerOptions\n\tInterface string `json:\"interface,omitempty\"`\n}\n\n"
+        "type RouteFluentResolverGroupDNSServerOptions struct {\n"
+        "\tPrimary                  []string           `json:\"primary,omitempty\"`\n"
+        "\tFallback                 string             `json:\"fallback,omitempty\"`\n"
+        "\tFallbackEnabled          bool               `json:\"fallback_enabled,omitempty\"`\n"
+        "\tMode                     string             `json:\"mode,omitempty\"`\n"
+        "\tProbeDomains             []string           `json:\"probe_domains,omitempty\"`\n"
+        "\tFailureThreshold         int                `json:\"failure_threshold,omitempty\"`\n"
+        "\tRecoverySuccessThreshold int                `json:\"recovery_success_threshold,omitempty\"`\n"
+        "\tProbeInterval            badoption.Duration `json:\"probe_interval,omitempty\"`\n"
+        "\tUnhealthyCooldown        badoption.Duration `json:\"unhealthy_cooldown,omitempty\"`\n"
+        "\tFallbackTTLCap           badoption.Duration `json:\"fallback_ttl_cap,omitempty\"`\n"
+        "}\n",
+    )
+    replace_once(
+        source_dir / "include" / "registry.go",
+        '\t"github.com/sagernet/sing-box/dns/transport/local"\n',
+        '\t"github.com/sagernet/sing-box/dns/transport/local"\n\t"github.com/sagernet/sing-box/dns/transport/routefluentgroup"\n',
+    )
+    replace_once(
+        source_dir / "include" / "registry.go",
+        "\tlocal.RegisterTransport(registry)\n\tfakeip.RegisterTransport(registry)\n",
+        "\tlocal.RegisterTransport(registry)\n\troutefluentgroup.RegisterTransport(registry)\n\tfakeip.RegisterTransport(registry)\n",
+    )
+    copy_patch_file(source_dir, "dns/transport/routefluentgroup/routefluentgroup.go")
+    copy_patch_file(source_dir, "dns/transport/routefluentgroup/routefluentgroup_test.go")
+    replace_once(
         source_dir / "option" / "anytls.go",
         "\tPassword                 string             `json:\"password,omitempty\"`\n",
         "\tPassword                 string             `json:\"password,omitempty\"`\n\tClient                   string             `json:\"client,omitempty\"`\n",
@@ -191,7 +260,7 @@ def build(args: argparse.Namespace) -> None:
 
     go = require_tool("go")
     run([go, "fmt", "./..."], cwd=sing_anytls_dir)
-    run([go, "fmt", "./option", "./protocol/anytls"], cwd=sing_box_dir)
+    run([go, "fmt", "./adapter", "./constant", "./dns", "./dns/transport/routefluentgroup", "./include", "./option", "./protocol/anytls"], cwd=sing_box_dir)
     replace_path = os.path.relpath(sing_anytls_dir, sing_box_dir).replace(os.sep, "/")
     run([go, "mod", "edit", f"-replace=github.com/anytls/sing-anytls={replace_path}"], cwd=sing_box_dir)
 
@@ -217,7 +286,7 @@ def build(args: argparse.Namespace) -> None:
         "schema": "routefluent.sing_box_build.v1",
         "name": "sing-box",
         "patch_id": PATCH_ID,
-        "features": [FEATURE_ANYTLS_CLIENT_FIELD],
+        "features": [FEATURE_ANYTLS_CLIENT_FIELD, FEATURE_ROUTEFLUENT_DNS_RESOLVER_GROUP],
         "sing_box_version": SING_BOX_VERSION,
         "sing_box_commit": SING_BOX_COMMIT,
         "sing_anytls_version": SING_ANYTLS_VERSION,

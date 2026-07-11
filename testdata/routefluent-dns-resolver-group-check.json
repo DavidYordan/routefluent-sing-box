@@ -1,0 +1,60 @@
+{
+  "log": {
+    "disabled": true
+  },
+  "dns": {
+    "servers": [
+      {
+        "tag": "local-system",
+        "type": "local"
+      },
+      {
+        "tag": "cloudflare-doh",
+        "type": "https",
+        "server": "1.1.1.1",
+        "server_port": 443,
+        "path": "/dns-query"
+      },
+      {
+        "tag": "rf-resolver-cloudflare",
+        "type": "routefluent_resolver_group",
+        "primary": [
+          "cloudflare-doh"
+        ],
+        "fallback": "local-system",
+        "fallback_enabled": true,
+        "probe_domains": [
+          "www.gstatic.com",
+          "cloudflare.com"
+        ],
+        "failure_threshold": 2,
+        "recovery_success_threshold": 2,
+        "probe_interval": "30s",
+        "unhealthy_cooldown": "20s",
+        "fallback_ttl_cap": "60s"
+      },
+      {
+        "tag": "rf-resolver-local-only",
+        "type": "routefluent_resolver_group",
+        "fallback": "local-system",
+        "fallback_enabled": true,
+        "mode": "local_only",
+        "fallback_ttl_cap": "60s"
+      }
+    ],
+    "final": "rf-resolver-cloudflare"
+  },
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "route": {
+    "default_domain_resolver": {
+      "server": "rf-resolver-cloudflare",
+      "strategy": "ipv4_only"
+    },
+    "final": "direct"
+  }
+}
