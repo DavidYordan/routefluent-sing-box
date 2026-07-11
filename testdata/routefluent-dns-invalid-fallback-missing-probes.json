@@ -1,0 +1,43 @@
+{
+  "log": {
+    "disabled": true
+  },
+  "dns": {
+    "servers": [
+      {
+        "tag": "primary-doh",
+        "type": "https",
+        "server": "1.1.1.1",
+        "server_port": 443,
+        "path": "/dns-query"
+      },
+      {
+        "tag": "local-system",
+        "type": "local"
+      },
+      {
+        "tag": "rf-missing-probes",
+        "type": "routefluent_resolver_group",
+        "primary": [
+          "primary-doh"
+        ],
+        "fallback": "local-system",
+        "fallback_enabled": true
+      }
+    ],
+    "final": "rf-missing-probes"
+  },
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "route": {
+    "default_domain_resolver": {
+      "server": "rf-missing-probes",
+      "strategy": "ipv4_only"
+    },
+    "final": "direct"
+  }
+}

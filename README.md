@@ -18,7 +18,7 @@ This repository does not maintain a broad sing-box fork. It is a deterministic b
 | sing-box | `v1.13.12` / `1086ab2563320e0da0c23b3a491d8dfa0939dff4` |
 | sing-anytls | `v0.0.11` / `130d2e61b8895727bfed4942c535e91b246a9603` |
 | RouteFluent patch id | `routefluent-anytls-client-dns-resolver-group-check-v1` |
-| Version name | `1.13.12-routefluent-anytls-client.5` |
+| Version name | `1.13.12-routefluent-anytls-client.6` |
 | Default tags | `with_utls with_clash_api` |
 | Target | `linux/amd64`, `CGO_ENABLED=0` |
 
@@ -62,6 +62,18 @@ The second patch adds a RouteFluent DNS server type:
 
 It is documented in `docs/doh-priority-local-fallback-resolution.md`. The behavior is provider-scoped: configured DoH resolvers are preferred, local host DNS is allowed only as a temporary fallback when every DoH resolver in that group is unavailable, and recovered DoH resolvers automatically become preferred again. A `local_only` mode exists for providers that do not carry DoH.
 
+Generator contract:
+
+- regular mode must configure at least one primary DoH server;
+- `fallback_enabled=true` must also configure a local fallback resolver and non-empty `probe_domains`;
+- strict provider-DoH mode must leave `fallback_enabled=false`; when all primary DoH resolvers are unavailable, resolution fails closed;
+- provider lines without DoH must use `mode=local_only`, empty `primary`, and an explicit local fallback;
+- outbounds whose `server` is a domain must bind `domain_resolver.server` to the provider-scoped RouteFluent resolver group;
+- configs that rely on route-level domain resolution should also set `route.default_domain_resolver`;
+- DoH endpoints whose own `server` is a domain must set an explicit bootstrap `domain_resolver`.
+
+Debug logging records resolver-group selection, strict failures, fallback use, and recovery probes. Local fallback is an explicit availability policy for the same provider resolver group; it is not route fallback, outbound failover, subscription compatibility, or a data-plane direct bypass.
+
 The third patch makes `sing-box check` run the service pre-start lifecycle. This catches RouteFluent DNS transport dependency errors before deployment, including a local resolver used as a DoH primary or a non-local resolver used as fallback.
 
 ## Local Build
@@ -91,36 +103,30 @@ Smoke check:
 ./dist/sing-box-linux-amd64 version
 ./dist/sing-box-linux-amd64 check -c testdata/anytls-client-check.json
 ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-resolver-group-check.json
+./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-doh-bootstrap-check.json
 ! ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-invalid-primary-local.json
 ! ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-invalid-fallback-https.json
+! ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-invalid-fallback-missing-probes.json
+python3 scripts/routefluent_dns_runtime_smoke.py --sing-box ./dist/sing-box-linux-amd64
 ```
 
 Expected version string includes:
 
 ```text
-1.13.12-routefluent-anytls-client.5
+1.13.12-routefluent-anytls-client.6
 ```
 
 ## GitHub Release
 
-`docs/release-workflow.yml` is the intended GitHub Actions workflow. Copy it to `.github/workflows/release.yml` in this repository to enable GitHub-built releases.
+`.github/workflows/release.yml` is the active GitHub Actions workflow. `docs/release-workflow.yml` is kept as a readable copy for downstream audits.
 
-To enable it without changing local Git, Git Credential Manager, `gh`, or PAT state:
-
-1. Open `https://github.com/DavidYordan/routefluent-sing-box` in a browser.
-2. Open `docs/release-workflow.yml` and copy its full contents.
-3. Use GitHub's web file editor to create `.github/workflows/release.yml`.
-4. Paste the copied workflow and commit it to `main`.
-
-This uses the browser GitHub session only. The local CLI alternative is `gh auth refresh -h github.com -s workflow`, but that intentionally changes local GitHub CLI authorization and is not required for the web-editor path.
-
-Tags matching `v*` then trigger the release workflow.
+Tags matching `v*` trigger the release workflow. The workflow builds the Linux amd64 binary, runs the static RouteFluent check fixtures, runs the local runtime DNS smoke, writes checksums, and publishes the immutable release assets.
 
 Recommended tag:
 
 ```bash
-git tag v1.13.12-routefluent-anytls-client.5
-git push origin v1.13.12-routefluent-anytls-client.5
+git tag v1.13.12-routefluent-anytls-client.6
+git push origin v1.13.12-routefluent-anytls-client.6
 ```
 
 Release assets:
@@ -129,7 +135,7 @@ Release assets:
 - `sing-box-linux-amd64.routefluent-anytls-client.json`
 - `SHA256SUMS`
 
-The first repository publication used an OAuth token without the `workflow` scope, so the workflow is committed as a template rather than an active workflow file. Enabling the active workflow requires a token with `workflow` scope.
+Pushing workflow changes from a local GitHub CLI session requires the `workflow` OAuth scope. Browser edits use the browser GitHub session instead.
 
 ## Use From Another Project
 
@@ -142,7 +148,7 @@ Other projects should consume an immutable release or pin this repository as a s
 Release-binary mode:
 
 ```bash
-VERSION=v1.13.12-routefluent-anytls-client.5
+VERSION=v1.13.12-routefluent-anytls-client.6
 BASE=https://github.com/DavidYordan/routefluent-sing-box/releases/download/$VERSION
 
 curl -L -o sing-box-linux-amd64 "$BASE/sing-box-linux-amd64"
@@ -157,7 +163,7 @@ Pinned submodule mode:
 
 ```bash
 git submodule add https://github.com/DavidYordan/routefluent-sing-box.git third_party/routefluent-sing-box
-git -C third_party/routefluent-sing-box checkout v1.13.12-routefluent-anytls-client.5
+git -C third_party/routefluent-sing-box checkout v1.13.12-routefluent-anytls-client.6
 git add .gitmodules third_party/routefluent-sing-box
 ```
 

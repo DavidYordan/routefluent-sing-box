@@ -30,6 +30,7 @@ jobs:
           ./dist/sing-box-linux-amd64 version
           ./dist/sing-box-linux-amd64 check -c testdata/anytls-client-check.json
           ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-resolver-group-check.json
+          ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-doh-bootstrap-check.json
           if ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-invalid-primary-local.json; then
             echo "invalid local primary resolver unexpectedly passed"
             exit 1
@@ -38,6 +39,11 @@ jobs:
             echo "invalid HTTPS fallback resolver unexpectedly passed"
             exit 1
           fi
+          if ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-invalid-fallback-missing-probes.json; then
+            echo "fallback without probe_domains unexpectedly passed"
+            exit 1
+          fi
+          python3 scripts/routefluent_dns_runtime_smoke.py --sing-box ./dist/sing-box-linux-amd64
 
       - name: Write checksums
         run: |

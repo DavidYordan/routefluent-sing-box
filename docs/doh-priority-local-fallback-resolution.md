@@ -1,7 +1,7 @@
 # DoH 优先与本机 DNS 兜底解析设计
 
 日期：2026-07-11
-状态：已在开发分支实现，目标发布版本 `v1.13.12-routefluent-anytls-client.5`
+状态：已在开发分支实现，目标发布版本 `v1.13.12-routefluent-anytls-client.6`
 
 ## 背景
 
@@ -168,9 +168,12 @@ sing-box `v1.13.12` 已有基础构件：
 2. `mode` 只允许省略或为 `local_only`。
 3. 常规模式下 `primary` 至少包含一个 DoH server。
 4. `local_only` 模式下 `primary` 必须为空，且必须配置 `fallback`。
-5. `fallback_enabled=false` 时，如果所有 DoH 不可用，必须返回解析错误，不能静默使用本机 DNS。
-6. 未知字段、错误类型、重复 tag、循环引用和空 fallback tag 都必须在 `sing-box check -c` 阶段失败。
-7. wrapper 只允许包装现有 DNS transport，不允许自己解析订阅字段或改写 outbound。
+5. 常规模式下 `fallback_enabled=true` 时，`fallback` 必须引用本机 local resolver，且 `probe_domains` 必须非空；否则 `sing-box check -c` 必须失败。
+6. `fallback_enabled=false` 时，如果所有 DoH 不可用，必须返回解析错误，不能静默使用本机 DNS。
+7. DoH endpoint 的 `server` 如果是域名，必须显式配置 bootstrap `domain_resolver`，不能隐式借用业务解析组。
+8. outbound `server` 是域名时，生成器必须显式设置 `domain_resolver.server` 到对应 `routefluent_resolver_group`；需要 route 层域名解析时也必须设置 `route.default_domain_resolver`。
+9. 未知字段、错误类型、重复 tag、循环引用和空 fallback tag 都必须在 `sing-box check -c` 阶段失败。
+10. wrapper 只允许包装现有 DNS transport，不允许自己解析订阅字段或改写 outbound。
 
 ## 解析选择逻辑
 
@@ -265,6 +268,14 @@ DoH server 自身可能也是域名，例如 `dns.vendor-a.example`。这类 boo
 - probe 成功或失败。
 - 缓存命中来源。
 - 返回地址族与结果数量。
+
+当前实现的 release smoke 会验证以下关键证据：
+
+- primary DoH 能解析 outbound server 域名并完成 `tools fetch`。
+- primary DoH 不可用且 `fallback_enabled=false` 时按 `primary DoH resolvers unavailable` 失败关闭。
+- Linux release 环境中，primary DoH 不可用且 `fallback_enabled=true` 时可以临时使用本机 DNS。
+- `fallback_enabled=true` 但缺少 `probe_domains` 的配置必须在 `check -c` 阶段失败。
+- DoH endpoint 为域名且带 bootstrap `domain_resolver` 的配置必须在 `check -c` 阶段通过。
 
 敏感信息处理：
 

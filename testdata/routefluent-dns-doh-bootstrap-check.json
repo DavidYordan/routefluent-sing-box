@@ -1,0 +1,64 @@
+{
+  "log": {
+    "disabled": true
+  },
+  "dns": {
+    "servers": [
+      {
+        "tag": "local-system",
+        "type": "local"
+      },
+      {
+        "tag": "provider-doh-domain",
+        "type": "https",
+        "server": "dns.provider.example",
+        "server_port": 443,
+        "path": "/dns-query",
+        "domain_resolver": {
+          "server": "local-system",
+          "strategy": "ipv4_only"
+        },
+        "tls": {
+          "enabled": true,
+          "server_name": "dns.provider.example"
+        }
+      },
+      {
+        "tag": "rf-provider",
+        "type": "routefluent_resolver_group",
+        "primary": [
+          "provider-doh-domain"
+        ],
+        "fallback": "local-system",
+        "fallback_enabled": true,
+        "probe_domains": [
+          "www.gstatic.com",
+          "cloudflare.com"
+        ],
+        "failure_threshold": 2,
+        "recovery_success_threshold": 2,
+        "probe_interval": "30s",
+        "unhealthy_cooldown": "20s",
+        "fallback_ttl_cap": "60s"
+      }
+    ],
+    "final": "rf-provider"
+  },
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct",
+      "domain_resolver": {
+        "server": "rf-provider",
+        "strategy": "ipv4_only"
+      }
+    }
+  ],
+  "route": {
+    "default_domain_resolver": {
+      "server": "rf-provider",
+      "strategy": "ipv4_only"
+    },
+    "final": "direct"
+  }
+}
