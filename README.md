@@ -18,7 +18,7 @@ This repository does not maintain a broad sing-box fork. It is a deterministic b
 | sing-box | `v1.13.12` / `1086ab2563320e0da0c23b3a491d8dfa0939dff4` |
 | sing-anytls | `v0.0.11` / `130d2e61b8895727bfed4942c535e91b246a9603` |
 | RouteFluent patch id | `routefluent-anytls-client-config-v1` |
-| Version name | `1.13.12-routefluent-anytls-client.2` |
+| Version name | `1.13.12-routefluent-anytls-client.3` |
 | Default tags | `with_utls with_clash_api` |
 | Target | `linux/amd64`, `CGO_ENABLED=0` |
 
@@ -78,7 +78,7 @@ Smoke check:
 Expected version string includes:
 
 ```text
-1.13.12-routefluent-anytls-client.2
+1.13.12-routefluent-anytls-client.3
 ```
 
 ## GitHub Release
@@ -99,8 +99,8 @@ Tags matching `v*` then trigger the release workflow.
 Recommended tag:
 
 ```bash
-git tag v1.13.12-routefluent-anytls-client.2
-git push origin v1.13.12-routefluent-anytls-client.2
+git tag v1.13.12-routefluent-anytls-client.3
+git push origin v1.13.12-routefluent-anytls-client.3
 ```
 
 Release assets:
@@ -118,7 +118,7 @@ Other projects should consume an immutable release or pin this repository as a s
 Release-binary mode:
 
 ```bash
-VERSION=v1.13.12-routefluent-anytls-client.2
+VERSION=v1.13.12-routefluent-anytls-client.3
 BASE=https://github.com/DavidYordan/routefluent-sing-box/releases/download/$VERSION
 
 curl -L -o sing-box-linux-amd64 "$BASE/sing-box-linux-amd64"
@@ -133,7 +133,7 @@ Pinned submodule mode:
 
 ```bash
 git submodule add https://github.com/DavidYordan/routefluent-sing-box.git third_party/routefluent-sing-box
-git -C third_party/routefluent-sing-box checkout v1.13.12-routefluent-anytls-client.2
+git -C third_party/routefluent-sing-box checkout v1.13.12-routefluent-anytls-client.3
 git add .gitmodules third_party/routefluent-sing-box
 ```
 

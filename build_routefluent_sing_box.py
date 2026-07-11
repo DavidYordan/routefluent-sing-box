@@ -28,7 +28,7 @@ SING_BOX_COMMIT = "1086ab2563320e0da0c23b3a491d8dfa0939dff4"
 SING_ANYTLS_COMMIT = "130d2e61b8895727bfed4942c535e91b246a9603"
 PATCH_ID = "routefluent-anytls-client-config-v1"
 FEATURE_ANYTLS_CLIENT_FIELD = "anytls_outbound_client_field"
-PATCHED_SING_BOX_VERSION = "1.13.12-routefluent-anytls-client.2"
+PATCHED_SING_BOX_VERSION = "1.13.12-routefluent-anytls-client.3"
 DEFAULT_TAGS = "with_utls with_clash_api"
 
 
