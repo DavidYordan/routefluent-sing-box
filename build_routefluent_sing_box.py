@@ -27,10 +27,11 @@ SING_ANYTLS_VERSION = "v0.0.11"
 SING_BOX_COMMIT = "1086ab2563320e0da0c23b3a491d8dfa0939dff4"
 SING_ANYTLS_COMMIT = "130d2e61b8895727bfed4942c535e91b246a9603"
 REPO_ROOT = Path(__file__).resolve().parent
-PATCH_ID = "routefluent-anytls-client-dns-resolver-group-v1"
+PATCH_ID = "routefluent-anytls-client-dns-resolver-group-check-v1"
 FEATURE_ANYTLS_CLIENT_FIELD = "anytls_outbound_client_field"
 FEATURE_ROUTEFLUENT_DNS_RESOLVER_GROUP = "routefluent_dns_resolver_group"
-PATCHED_SING_BOX_VERSION = "1.13.12-routefluent-anytls-client.4"
+FEATURE_ROUTEFLUENT_DNS_CHECK_START_VALIDATION = "routefluent_dns_check_start_validation"
+PATCHED_SING_BOX_VERSION = "1.13.12-routefluent-anytls-client.5"
 DEFAULT_TAGS = "with_utls with_clash_api"
 
 
@@ -177,6 +178,11 @@ def patch_sing_anytls(source_dir: Path) -> None:
 
 def patch_sing_box(source_dir: Path) -> None:
     replace_once(
+        source_dir / "cmd" / "sing-box" / "cmd_check.go",
+        "\tif err == nil {\n\t\tinstance.Close()\n\t}\n\tcancel()\n\treturn err\n",
+        "\tif err != nil {\n\t\tcancel()\n\t\treturn err\n\t}\n\terr = instance.PreStart()\n\tif err != nil {\n\t\tcancel()\n\t\treturn err\n\t}\n\terr = instance.Close()\n\tcancel()\n\treturn err\n",
+    )
+    replace_once(
         source_dir / "constant" / "dns.go",
         '\tDNSTypeTailscale   = "tailscale"\n',
         '\tDNSTypeTailscale                = "tailscale"\n\tDNSTypeRouteFluentResolverGroup = "routefluent_resolver_group"\n',
@@ -260,7 +266,7 @@ def build(args: argparse.Namespace) -> None:
 
     go = require_tool("go")
     run([go, "fmt", "./..."], cwd=sing_anytls_dir)
-    run([go, "fmt", "./adapter", "./constant", "./dns", "./dns/transport/routefluentgroup", "./include", "./option", "./protocol/anytls"], cwd=sing_box_dir)
+    run([go, "fmt", "./adapter", "./cmd/sing-box", "./constant", "./dns", "./dns/transport/routefluentgroup", "./include", "./option", "./protocol/anytls"], cwd=sing_box_dir)
     replace_path = os.path.relpath(sing_anytls_dir, sing_box_dir).replace(os.sep, "/")
     run([go, "mod", "edit", f"-replace=github.com/anytls/sing-anytls={replace_path}"], cwd=sing_box_dir)
 
@@ -286,7 +292,11 @@ def build(args: argparse.Namespace) -> None:
         "schema": "routefluent.sing_box_build.v1",
         "name": "sing-box",
         "patch_id": PATCH_ID,
-        "features": [FEATURE_ANYTLS_CLIENT_FIELD, FEATURE_ROUTEFLUENT_DNS_RESOLVER_GROUP],
+        "features": [
+            FEATURE_ANYTLS_CLIENT_FIELD,
+            FEATURE_ROUTEFLUENT_DNS_RESOLVER_GROUP,
+            FEATURE_ROUTEFLUENT_DNS_CHECK_START_VALIDATION,
+        ],
         "sing_box_version": SING_BOX_VERSION,
         "sing_box_commit": SING_BOX_COMMIT,
         "sing_anytls_version": SING_ANYTLS_VERSION,

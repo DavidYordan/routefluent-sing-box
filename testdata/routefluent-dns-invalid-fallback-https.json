@@ -1,0 +1,49 @@
+{
+  "log": {
+    "disabled": true
+  },
+  "dns": {
+    "servers": [
+      {
+        "tag": "primary-doh",
+        "type": "https",
+        "server": "1.1.1.1",
+        "server_port": 443,
+        "path": "/dns-query"
+      },
+      {
+        "tag": "fallback-doh",
+        "type": "https",
+        "server": "1.0.0.1",
+        "server_port": 443,
+        "path": "/dns-query"
+      },
+      {
+        "tag": "rf-invalid-fallback",
+        "type": "routefluent_resolver_group",
+        "primary": [
+          "primary-doh"
+        ],
+        "fallback": "fallback-doh",
+        "fallback_enabled": true,
+        "probe_domains": [
+          "www.gstatic.com"
+        ]
+      }
+    ],
+    "final": "rf-invalid-fallback"
+  },
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "route": {
+    "default_domain_resolver": {
+      "server": "rf-invalid-fallback",
+      "strategy": "ipv4_only"
+    },
+    "final": "direct"
+  }
+}

@@ -30,6 +30,14 @@ jobs:
           ./dist/sing-box-linux-amd64 version
           ./dist/sing-box-linux-amd64 check -c testdata/anytls-client-check.json
           ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-resolver-group-check.json
+          if ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-invalid-primary-local.json; then
+            echo "invalid local primary resolver unexpectedly passed"
+            exit 1
+          fi
+          if ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-invalid-fallback-https.json; then
+            echo "invalid HTTPS fallback resolver unexpectedly passed"
+            exit 1
+          fi
 
       - name: Write checksums
         run: |

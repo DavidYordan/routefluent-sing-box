@@ -1,0 +1,34 @@
+{
+  "log": {
+    "disabled": true
+  },
+  "dns": {
+    "servers": [
+      {
+        "tag": "local-system",
+        "type": "local"
+      },
+      {
+        "tag": "rf-invalid-primary",
+        "type": "routefluent_resolver_group",
+        "primary": [
+          "local-system"
+        ]
+      }
+    ],
+    "final": "rf-invalid-primary"
+  },
+  "outbounds": [
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "route": {
+    "default_domain_resolver": {
+      "server": "rf-invalid-primary",
+      "strategy": "ipv4_only"
+    },
+    "final": "direct"
+  }
+}

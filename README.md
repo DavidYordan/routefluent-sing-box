@@ -17,8 +17,8 @@ This repository does not maintain a broad sing-box fork. It is a deterministic b
 | --- | --- |
 | sing-box | `v1.13.12` / `1086ab2563320e0da0c23b3a491d8dfa0939dff4` |
 | sing-anytls | `v0.0.11` / `130d2e61b8895727bfed4942c535e91b246a9603` |
-| RouteFluent patch id | `routefluent-anytls-client-dns-resolver-group-v1` |
-| Version name | `1.13.12-routefluent-anytls-client.4` |
+| RouteFluent patch id | `routefluent-anytls-client-dns-resolver-group-check-v1` |
+| Version name | `1.13.12-routefluent-anytls-client.5` |
 | Default tags | `with_utls with_clash_api` |
 | Target | `linux/amd64`, `CGO_ENABLED=0` |
 
@@ -62,6 +62,8 @@ The second patch adds a RouteFluent DNS server type:
 
 It is documented in `docs/doh-priority-local-fallback-resolution.md`. The behavior is provider-scoped: configured DoH resolvers are preferred, local host DNS is allowed only as a temporary fallback when every DoH resolver in that group is unavailable, and recovered DoH resolvers automatically become preferred again. A `local_only` mode exists for providers that do not carry DoH.
 
+The third patch makes `sing-box check` run the service pre-start lifecycle. This catches RouteFluent DNS transport dependency errors before deployment, including a local resolver used as a DoH primary or a non-local resolver used as fallback.
+
 ## Local Build
 
 Prerequisites:
@@ -89,12 +91,14 @@ Smoke check:
 ./dist/sing-box-linux-amd64 version
 ./dist/sing-box-linux-amd64 check -c testdata/anytls-client-check.json
 ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-resolver-group-check.json
+! ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-invalid-primary-local.json
+! ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-invalid-fallback-https.json
 ```
 
 Expected version string includes:
 
 ```text
-1.13.12-routefluent-anytls-client.4
+1.13.12-routefluent-anytls-client.5
 ```
 
 ## GitHub Release
@@ -115,8 +119,8 @@ Tags matching `v*` then trigger the release workflow.
 Recommended tag:
 
 ```bash
-git tag v1.13.12-routefluent-anytls-client.4
-git push origin v1.13.12-routefluent-anytls-client.4
+git tag v1.13.12-routefluent-anytls-client.5
+git push origin v1.13.12-routefluent-anytls-client.5
 ```
 
 Release assets:
@@ -133,11 +137,12 @@ Other projects should consume an immutable release or pin this repository as a s
 
 - `anytls_outbound_client_field`
 - `routefluent_dns_resolver_group`
+- `routefluent_dns_check_start_validation`
 
 Release-binary mode:
 
 ```bash
-VERSION=v1.13.12-routefluent-anytls-client.4
+VERSION=v1.13.12-routefluent-anytls-client.5
 BASE=https://github.com/DavidYordan/routefluent-sing-box/releases/download/$VERSION
 
 curl -L -o sing-box-linux-amd64 "$BASE/sing-box-linux-amd64"
@@ -152,7 +157,7 @@ Pinned submodule mode:
 
 ```bash
 git submodule add https://github.com/DavidYordan/routefluent-sing-box.git third_party/routefluent-sing-box
-git -C third_party/routefluent-sing-box checkout v1.13.12-routefluent-anytls-client.4
+git -C third_party/routefluent-sing-box checkout v1.13.12-routefluent-anytls-client.5
 git add .gitmodules third_party/routefluent-sing-box
 ```
 

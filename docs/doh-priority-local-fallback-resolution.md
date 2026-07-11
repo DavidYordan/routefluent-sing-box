@@ -1,7 +1,7 @@
 # DoH 优先与本机 DNS 兜底解析设计
 
 日期：2026-07-11
-状态：已在开发分支实现，目标发布版本 `v1.13.12-routefluent-anytls-client.4`
+状态：已在开发分支实现，目标发布版本 `v1.13.12-routefluent-anytls-client.5`
 
 ## 背景
 
