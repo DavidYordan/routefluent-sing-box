@@ -28,7 +28,7 @@ SING_BOX_COMMIT = "1086ab2563320e0da0c23b3a491d8dfa0939dff4"
 SING_ANYTLS_COMMIT = "130d2e61b8895727bfed4942c535e91b246a9603"
 PATCH_ID = "routefluent-anytls-client-config-v1"
 FEATURE_ANYTLS_CLIENT_FIELD = "anytls_outbound_client_field"
-PATCHED_SING_BOX_VERSION = "1.13.12-routefluent-anytls-client.1"
+PATCHED_SING_BOX_VERSION = "1.13.12-routefluent-anytls-client.2"
 DEFAULT_TAGS = "with_utls with_clash_api"
 
 
@@ -192,7 +192,8 @@ def build(args: argparse.Namespace) -> None:
     go = require_tool("go")
     run([go, "fmt", "./..."], cwd=sing_anytls_dir)
     run([go, "fmt", "./option", "./protocol/anytls"], cwd=sing_box_dir)
-    run([go, "mod", "edit", f"-replace=github.com/anytls/sing-anytls={sing_anytls_dir.as_posix()}"], cwd=sing_box_dir)
+    replace_path = os.path.relpath(sing_anytls_dir, sing_box_dir).replace(os.sep, "/")
+    run([go, "mod", "edit", f"-replace=github.com/anytls/sing-anytls={replace_path}"], cwd=sing_box_dir)
 
     output = Path(args.output).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
