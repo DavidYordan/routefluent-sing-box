@@ -85,6 +85,15 @@ Expected version string includes:
 
 `docs/release-workflow.yml` is the intended GitHub Actions workflow. Copy it to `.github/workflows/release.yml` in this repository to enable GitHub-built releases.
 
+To enable it without changing local Git, Git Credential Manager, `gh`, or PAT state:
+
+1. Open `https://github.com/DavidYordan/routefluent-sing-box` in a browser.
+2. Open `docs/release-workflow.yml` and copy its full contents.
+3. Use GitHub's web file editor to create `.github/workflows/release.yml`.
+4. Paste the copied workflow and commit it to `main`.
+
+This uses the browser GitHub session only. The local CLI alternative is `gh auth refresh -h github.com -s workflow`, but that intentionally changes local GitHub CLI authorization and is not required for the web-editor path.
+
 Tags matching `v*` then trigger the release workflow.
 
 Recommended tag:
@@ -101,6 +110,40 @@ Release assets:
 - `SHA256SUMS`
 
 The first repository publication used an OAuth token without the `workflow` scope, so the workflow is committed as a template rather than an active workflow file. Enabling the active workflow requires a token with `workflow` scope.
+
+## Use From Another Project
+
+Other projects should consume an immutable release or pin this repository as a submodule. Do not replace a stock sing-box binary with this build unless the target runtime explicitly requires and verifies `anytls_outbound_client_field`.
+
+Release-binary mode:
+
+```bash
+VERSION=v1.13.12-routefluent-anytls-client.2
+BASE=https://github.com/DavidYordan/routefluent-sing-box/releases/download/$VERSION
+
+curl -L -o sing-box-linux-amd64 "$BASE/sing-box-linux-amd64"
+curl -L -o sing-box-linux-amd64.routefluent-anytls-client.json "$BASE/sing-box-linux-amd64.routefluent-anytls-client.json"
+curl -L -o SHA256SUMS "$BASE/SHA256SUMS"
+sha256sum -c SHA256SUMS
+chmod +x sing-box-linux-amd64
+./sing-box-linux-amd64 version
+```
+
+Pinned submodule mode:
+
+```bash
+git submodule add https://github.com/DavidYordan/routefluent-sing-box.git third_party/routefluent-sing-box
+git -C third_party/routefluent-sing-box checkout v1.13.12-routefluent-anytls-client.2
+git add .gitmodules third_party/routefluent-sing-box
+```
+
+Build from the submodule when the consuming project needs to produce its own artifact:
+
+```bash
+python third_party/routefluent-sing-box/build_routefluent_sing_box.py \
+  --output dist/sing-box-linux-amd64 \
+  --manifest dist/sing-box-linux-amd64.routefluent-anytls-client.json
+```
 
 ## RouteFluent Submodule Use
 
