@@ -265,7 +265,9 @@ def run_fetch(sing_box: Path, config: Path, url: str, timeout: int = 12) -> subp
 
 
 def choose_local_resolvable_host(port: int) -> str:
-    candidates = [socket.gethostname(), socket.getfqdn(), "localhost"]
+    # Prefer localhost: systemd-resolved on GitHub runners can reject the runner
+    # hostname even when Python getaddrinfo accepts it through NSS.
+    candidates = ["localhost", socket.gethostname(), socket.getfqdn()]
     seen: set[str] = set()
     for candidate in candidates:
         candidate = candidate.strip()

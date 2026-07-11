@@ -31,7 +31,7 @@ PATCH_ID = "routefluent-anytls-client-dns-resolver-group-check-v1"
 FEATURE_ANYTLS_CLIENT_FIELD = "anytls_outbound_client_field"
 FEATURE_ROUTEFLUENT_DNS_RESOLVER_GROUP = "routefluent_dns_resolver_group"
 FEATURE_ROUTEFLUENT_DNS_CHECK_START_VALIDATION = "routefluent_dns_check_start_validation"
-PATCHED_SING_BOX_VERSION = "1.13.12-routefluent-anytls-client.6"
+PATCHED_SING_BOX_VERSION = "1.13.12-routefluent-anytls-client.7"
 DEFAULT_TAGS = "with_utls with_clash_api"
 
 
