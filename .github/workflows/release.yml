@@ -29,6 +29,7 @@ jobs:
         run: |
           ./dist/sing-box-linux-amd64 version
           ./dist/sing-box-linux-amd64 check -c testdata/anytls-client-check.json
+          ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-resolver-group-check.json
 
       - name: Write checksums
         run: |
