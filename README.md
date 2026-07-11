@@ -47,6 +47,10 @@ sing_box_anytls_client=ok:client_field
 
 after its installed binary passes `sing-box check -c` with an AnyTLS outbound containing the `client` field. Stock sing-box must not report this capability.
 
+## Planned DNS Resolution Work
+
+The next sing-box patch is documented in `docs/doh-priority-local-fallback-resolution.md`. It defines provider-scoped outbound server resolution where configured DoH resolvers are preferred, local host DNS is allowed only as a temporary fallback when every DoH resolver in that group is unavailable, and recovered DoH resolvers automatically become preferred again.
+
 ## Local Build
 
 Prerequisites:
