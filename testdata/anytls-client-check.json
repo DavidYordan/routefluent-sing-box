@@ -1,0 +1,28 @@
+{
+  "log": {
+    "level": "error"
+  },
+  "inbounds": [],
+  "outbounds": [
+    {
+      "type": "anytls",
+      "tag": "anytls-client-field-check",
+      "server": "127.0.0.1",
+      "server_port": 443,
+      "password": "routefluent-check",
+      "client": "mihomo/1.19.28",
+      "tls": {
+        "enabled": true,
+        "server_name": "routefluent.invalid",
+        "insecure": true
+      }
+    },
+    {
+      "type": "direct",
+      "tag": "direct"
+    }
+  ],
+  "route": {
+    "final": "direct"
+  }
+}
