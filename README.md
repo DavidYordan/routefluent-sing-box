@@ -197,3 +197,15 @@ It is not a subscription parser compatibility layer, not an automatic provider f
 ## Upstream Licenses
 
 The binary is built from upstream sing-box and sing-anytls sources at the commits listed above. Their upstream licenses apply to the generated binary and patched source. This repository provides the deterministic build automation and patch procedure needed to reproduce the distributed artifacts.
+
+## Source Cache
+
+`build_routefluent_sing_box.py` keeps upstream source checkouts under `work/src`.
+If the checkout already exists at the pinned commit, the script reuses it, resets
+it locally, reapplies the RouteFluent patches, and builds without cloning again.
+The script only clones from the upstream repositories when the local checkout is
+missing or pinned to a different commit.
+
+This keeps all source cache state inside this project directory. It does not use
+or mutate global Go, Git, or system package locations beyond normal Go module
+cache behavior.

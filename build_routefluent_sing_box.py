@@ -81,6 +81,19 @@ def remove_tree(path: Path) -> None:
 
 def clone_exact(repo: str, tag: str, expected_commit: str, dest: Path) -> Path:
     git = require_tool("git")
+    if dest.exists():
+        git_marker = dest / ".git"
+        if git_marker.exists():
+            actual = run([git, "rev-parse", "HEAD"], cwd=dest).strip()
+            if actual == expected_commit:
+                print(f"[INFO] reuse local source cache: {dest}")
+                run([git, "reset", "--hard", expected_commit], cwd=dest)
+                run([git, "clean", "-fdx"], cwd=dest)
+                return dest
+            print(f"[WARN] local source cache {dest} is {actual}, expected {expected_commit}; refreshing")
+        else:
+            print(f"[WARN] local source cache path is not a git checkout: {dest}; refreshing")
+
     last_err: Exception | None = None
     for attempt in range(1, 4):
         if dest.exists():
@@ -121,6 +134,11 @@ def copy_patch_file(source_dir: Path, relative_path: str) -> None:
     target = source_dir / relative_path
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source, target)
+
+
+def gofmt_files(paths: list[Path]) -> None:
+    gofmt = require_tool("gofmt")
+    run([gofmt, "-w", *[str(path) for path in paths]])
 
 
 def patch_sing_anytls(source_dir: Path) -> None:
@@ -265,8 +283,21 @@ def build(args: argparse.Namespace) -> None:
     patch_sing_box(sing_box_dir)
 
     go = require_tool("go")
-    run([go, "fmt", "./..."], cwd=sing_anytls_dir)
-    run([go, "fmt", "./adapter", "./cmd/sing-box", "./constant", "./dns", "./dns/transport/routefluentgroup", "./include", "./option", "./protocol/anytls"], cwd=sing_box_dir)
+    gofmt_files([
+        sing_anytls_dir / "client.go",
+        sing_anytls_dir / "session" / "client.go",
+        sing_anytls_dir / "session" / "session.go",
+        sing_box_dir / "cmd" / "sing-box" / "cmd_check.go",
+        sing_box_dir / "constant" / "dns.go",
+        sing_box_dir / "adapter" / "dns.go",
+        sing_box_dir / "dns" / "client.go",
+        sing_box_dir / "dns" / "transport" / "routefluentgroup" / "routefluentgroup.go",
+        sing_box_dir / "dns" / "transport" / "routefluentgroup" / "routefluentgroup_test.go",
+        sing_box_dir / "include" / "registry.go",
+        sing_box_dir / "option" / "dns.go",
+        sing_box_dir / "option" / "anytls.go",
+        sing_box_dir / "protocol" / "anytls" / "outbound.go",
+    ])
     replace_path = os.path.relpath(sing_anytls_dir, sing_box_dir).replace(os.sep, "/")
     run([go, "mod", "edit", f"-replace=github.com/anytls/sing-anytls={replace_path}"], cwd=sing_box_dir)
 
