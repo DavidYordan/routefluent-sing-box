@@ -1,7 +1,9 @@
 # DoH 优先与本机 DNS 兜底解析设计
 
 日期：2026-07-11
-状态：已在开发分支实现，目标发布版本 `v1.13.12-routefluent-anytls-client.7`
+状态：历史实验 / 已退出 NekoRay 产品契约（2026-07-20）
+
+> 本文只保留上一阶段的设计证据，不是现行需求。现行 NekoRay 产品只允许 strict primary DoH；本机 fallback、`local_only`、探测恢复和本机 DNS bootstrap 均被根目录 ConfigBuilder 拒绝。受控 core fork 在发布前仍需删除这些残余实现。
 
 ## 背景
 
