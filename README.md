@@ -1,5 +1,7 @@
 # RouteFluent sing-box
 
+> NekoRay product integration notice (2026-07-20): the current product contract permits only strict `primary` DoH resolver groups. `fallback`, `fallback_enabled`, `local_only`, probe-based recovery, and local DNS bootstrap are quarantined legacy experiments; the root ConfigBuilder rejects them, including in custom configs. They must be removed from the controlled fork before release and must not be generated or advertised as supported product behavior.
+
 Controlled sing-box build used by RouteFluent when a route explicitly requires the AnyTLS outbound `client` field or RouteFluent's provider-scoped DNS resolver group.
 
 This repository does not maintain a broad sing-box fork. It is a deterministic build wrapper that:
