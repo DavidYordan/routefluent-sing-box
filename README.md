@@ -154,3 +154,7 @@ python third_party/sing-box/build_routefluent_sing_box.py \
 该制品不是订阅解析兼容层，不提供自动换线路、跨 provider fallback 或数据面 direct。RouteFluent 编译器和 Deploy 路径仍会在字段、版本、manifest 或运行证据不一致时失败关闭。
 
 生成二进制所包含的上游 sing-box 与 sing-anytls 继续适用各自许可证；本仓库负责可复现构建和 RouteFluent 窄补丁。
+
+## 源码缓存
+
+构建脚本把上游 checkout 保存在指定 workdir 的 `src` 目录。缓存恰好位于固定 commit 时，脚本会先将这个专用派生目录清理回该 commit，再重新应用 RouteFluent 补丁；commit 不一致或目录不是 Git checkout 时才删除并重新克隆。缓存 checkout 强制使用 LF，避免 Windows 全局 Git 配置改变制品哈希。缓存不会改变版本核验、补丁锚点校验或制品哈希要求。

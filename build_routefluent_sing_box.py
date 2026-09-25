@@ -70,6 +70,23 @@ def require_tool(name: str) -> str:
     return found
 
 
+def read_git_config(git: str, repository: Path, key: str) -> str:
+    completed = subprocess.run(
+        [git, "config", "--local", "--get", key],
+        cwd=str(repository),
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if completed.returncode == 1:
+        return ""
+    if completed.returncode != 0:
+        raise RuntimeError(f"unable to read Git config {key} in {repository}: {completed.stdout.strip()}")
+    return completed.stdout.strip()
+
+
 def remove_tree(path: Path) -> None:
     def handle_remove_error(func, target, exc_info):
         try:
@@ -83,13 +100,31 @@ def remove_tree(path: Path) -> None:
 
 def clone_exact(repo: str, tag: str, expected_commit: str, dest: Path) -> Path:
     git = require_tool("git")
+    if dest.exists():
+        git_marker = dest / ".git"
+        if git_marker.exists():
+            autocrlf = read_git_config(git, dest, "core.autocrlf").lower()
+            if autocrlf != "false":
+                print(f"[WARN] local source cache {dest} does not guarantee LF checkout; refreshing")
+            else:
+                actual = run([git, "rev-parse", "HEAD"], cwd=dest).strip()
+                if actual == expected_commit:
+                    print(f"[INFO] reuse local source cache: {dest}")
+                    run([git, "reset", "--hard", expected_commit], cwd=dest)
+                    run([git, "clean", "-fdx"], cwd=dest)
+                    return dest
+                print(f"[WARN] local source cache {dest} is {actual}, expected {expected_commit}; refreshing")
+        else:
+            print(f"[WARN] local source cache path is not a git checkout: {dest}; refreshing")
+
     last_err: Exception | None = None
     for attempt in range(1, 4):
         if dest.exists():
             remove_tree(dest)
         try:
             dest.parent.mkdir(parents=True, exist_ok=True)
-            run([git, "clone", "--depth", "1", "--branch", tag, repo, str(dest)])
+            run([git, "-c", "core.autocrlf=false", "clone", "--depth", "1", "--branch", tag, repo, str(dest)])
+            run([git, "config", "--local", "core.autocrlf", "false"], cwd=dest)
             last_err = None
             break
         except RuntimeError as exc:
@@ -123,6 +158,11 @@ def copy_patch_file(source_dir: Path, relative_path: str) -> None:
     target = source_dir / relative_path
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source, target)
+
+
+def gofmt_files(paths: list[Path]) -> None:
+    gofmt = require_tool("gofmt")
+    run([gofmt, "-w", *[str(path) for path in paths]])
 
 
 def patch_sing_box(source_dir: Path) -> None:
@@ -193,7 +233,14 @@ def build(args: argparse.Namespace) -> None:
     patch_sing_box(sing_box_dir)
 
     go = require_tool("go")
-    run([go, "fmt", "./cmd/sing-box", "./constant", "./dns/transport/routefluentgroup", "./include", "./option"], cwd=sing_box_dir)
+    gofmt_files([
+        sing_box_dir / "cmd" / "sing-box" / "cmd_check.go",
+        sing_box_dir / "constant" / "dns.go",
+        sing_box_dir / "dns" / "transport" / "routefluentgroup" / "routefluentgroup.go",
+        sing_box_dir / "dns" / "transport" / "routefluentgroup" / "routefluentgroup_test.go",
+        sing_box_dir / "include" / "registry.go",
+        sing_box_dir / "option" / "dns.go",
+    ])
 
     output = Path(args.output).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
