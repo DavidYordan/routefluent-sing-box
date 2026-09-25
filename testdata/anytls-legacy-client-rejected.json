@@ -6,7 +6,7 @@
   "outbounds": [
     {
       "type": "anytls",
-      "tag": "anytls-client-field-check",
+      "tag": "anytls-legacy-client-must-fail",
       "server": "127.0.0.1",
       "server_port": 443,
       "password": "routefluent-check",

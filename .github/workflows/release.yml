@@ -28,7 +28,11 @@ jobs:
       - name: Smoke check
         run: |
           ./dist/sing-box-linux-amd64 version
-          ./dist/sing-box-linux-amd64 check -c testdata/anytls-client-check.json
+          ./dist/sing-box-linux-amd64 check -c testdata/anytls-client-metadata-check.json
+          if ./dist/sing-box-linux-amd64 check -c testdata/anytls-legacy-client-rejected.json; then
+            echo "removed private AnyTLS client field unexpectedly passed"
+            exit 1
+          fi
           ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-resolver-group-check.json
           ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-doh-bootstrap-check.json
           if ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-invalid-primary-local.json; then
@@ -48,7 +52,7 @@ jobs:
       - name: Write checksums
         run: |
           cd dist
-          sha256sum sing-box-linux-amd64 sing-box-linux-amd64.routefluent-anytls-client.json > SHA256SUMS
+          sha256sum sing-box-linux-amd64 sing-box-linux-amd64.routefluent-dns.json > SHA256SUMS
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
@@ -56,7 +60,7 @@ jobs:
           name: routefluent-sing-box-linux-amd64
           path: |
             dist/sing-box-linux-amd64
-            dist/sing-box-linux-amd64.routefluent-anytls-client.json
+            dist/sing-box-linux-amd64.routefluent-dns.json
             dist/SHA256SUMS
 
       - name: Publish GitHub release
@@ -65,5 +69,5 @@ jobs:
         with:
           files: |
             dist/sing-box-linux-amd64
-            dist/sing-box-linux-amd64.routefluent-anytls-client.json
+            dist/sing-box-linux-amd64.routefluent-dns.json
             dist/SHA256SUMS

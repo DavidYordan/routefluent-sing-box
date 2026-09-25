@@ -2,6 +2,7 @@ package routefluentgroup
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -35,7 +36,7 @@ const (
 )
 
 var _ adapter.DNSTransport = (*Transport)(nil)
-var _ adapter.DNSCacheControlTransport = (*Transport)(nil)
+var _ adapter.DNSTransportWithEnvironment = (*Transport)(nil)
 
 func RegisterTransport(registry *boxdns.TransportRegistry) {
 	boxdns.RegisterTransport[option.RouteFluentResolverGroupDNSServerOptions](registry, C.DNSTypeRouteFluentResolverGroup, NewTransport)
@@ -191,8 +192,23 @@ func NewTransport(ctx context.Context, logger log.ContextLogger, tag string, opt
 	}, nil
 }
 
-func (t *Transport) DisableDNSCache() bool {
-	return !t.localOnly
+func (t *Transport) Environment() []string {
+	t.access.Lock()
+	defer t.access.Unlock()
+	if t.localOnly {
+		return []string{"mode=local_only", "fallback=" + t.fallbackTag}
+	}
+	environment := make([]string, 0, len(t.primaries)+2)
+	environment = append(environment, "mode=primary", "fallback="+t.fallbackTag)
+	for _, primary := range t.primaries {
+		environment = append(environment,
+			primary.tag+":state="+strconv.Itoa(primary.state)+
+				":failures="+strconv.Itoa(primary.failures)+
+				":successes="+strconv.Itoa(primary.successes)+
+				":next_probe="+strconv.FormatInt(primary.nextProbe.UnixNano(), 10),
+		)
+	}
+	return environment
 }
 
 func (t *Transport) Start(stage adapter.StartStage) error {
@@ -263,6 +279,13 @@ func (t *Transport) Exchange(ctx context.Context, message *mDNS.Msg) (*mDNS.Msg,
 		reason += ": " + strings.Join(failures, "; ")
 	}
 	return t.exchangeFallback(ctx, message, reason)
+}
+
+func (t *Transport) ExchangeAsync(ctx context.Context, message *mDNS.Msg, callback func(response *mDNS.Msg, err error)) {
+	go func() {
+		response, err := t.Exchange(ctx, message)
+		callback(response, err)
+	}()
 }
 
 func (t *Transport) resolveTransports() error {

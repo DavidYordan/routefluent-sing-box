@@ -80,6 +80,11 @@ func (t *fakeTransport) Exchange(ctx context.Context, message *mDNS.Msg) (*mDNS.
 	return nil, result.err
 }
 
+func (t *fakeTransport) ExchangeAsync(ctx context.Context, message *mDNS.Msg, callback func(response *mDNS.Msg, err error)) {
+	response, err := t.Exchange(ctx, message)
+	callback(response, err)
+}
+
 func question() *mDNS.Msg {
 	message := new(mDNS.Msg)
 	message.SetQuestion("proxy.example.", mDNS.TypeA)
@@ -241,7 +246,7 @@ func TestProbeRecoveryRequiresConfiguredSuccessThreshold(t *testing.T) {
 	require.Zero(t, group.primaries[0].successes)
 }
 
-func TestLocalOnlyUsesFallbackAndAllowsCache(t *testing.T) {
+func TestLocalOnlyUsesFallbackAndHasStableCacheEnvironment(t *testing.T) {
 	fallback := newFakeTransport(C.DNSTypeLocal, "local", fakeResult{response: successResponse(question(), "192.0.2.100", 600)})
 	group := testGroup(nil, fallback, true)
 	group.localOnly = true
@@ -250,7 +255,19 @@ func TestLocalOnlyUsesFallbackAndAllowsCache(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, mDNS.RcodeSuccess, response.Rcode)
 	require.Equal(t, 1, fallback.calls)
-	require.False(t, group.DisableDNSCache())
+	require.Equal(t, []string{"mode=local_only", "fallback="}, group.Environment())
+}
+
+func TestEnvironmentChangesWithPrimaryHealthState(t *testing.T) {
+	primary := newFakeTransport(C.DNSTypeHTTPS, "doh", fakeResult{err: errors.New("timeout")})
+	group := testGroup([]*primaryState{{tag: "doh", transport: primary, state: stateHealthy}}, nil, false)
+	before := group.Environment()
+
+	_, err := group.Exchange(context.Background(), question())
+	require.Error(t, err)
+	after := group.Environment()
+	require.NotEqual(t, before, after)
+	require.Contains(t, after[2], "doh:state=2:failures=1")
 }
 
 func TestStartRejectsNonDoHPrimaryAndNonLocalFallback(t *testing.T) {

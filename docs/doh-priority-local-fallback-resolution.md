@@ -1,7 +1,7 @@
 # DoH 优先与本机 DNS 兜底解析设计
 
 日期：2026-07-11
-状态：已在开发分支实现，目标发布版本 `v1.13.12-routefluent-anytls-client.7`
+状态：已实现并重基于 sing-box `v1.14.2`，发布版本 `v1.14.2-routefluent-dns.1`
 
 ## 背景
 
@@ -40,7 +40,7 @@ RouteFluent 生成的 sing-box 配置中，代理 outbound 的 `server` 可能�
 
 ## 现有 sing-box 能力与缺口
 
-sing-box `v1.13.12` 已有基础构件：
+sing-box `v1.14.2` 已有基础构件：
 
 - `dns.servers` 支持 `https` 类型 DoH server。
 - `dns.servers` 支持 `local` 类型本机解析。
@@ -221,7 +221,7 @@ healthy -> suspect -> unhealthy -> probing -> healthy
 1. DoH 不可用期间，解析组继续按 `probe_interval` 探测 primary DoH。
 2. DoH 达到恢复成功阈值后，新解析请求必须优先使用 DoH。
 3. local fallback 产生的缓存结果不能长期压住已恢复的 DoH。
-4. DoH 恢复时，应清理或绕过该解析组内由 local fallback 产生的缓存项。
+4. DoH 恢复时，解析组健康环境变化必须使旧 cache key 失效。
 5. 恢复只影响该解析组，不能改变其它解析组的状态。
 
 ## 缓存策略
@@ -242,7 +242,7 @@ group=rf-resolver-vendor-a
 resolver=local-system
 ```
 
-当 `rf-resolver-vendor-a` 的 DoH 恢复 healthy 后，该组内 `source=local_fallback` 的缓存项必须失效或不再优先命中。当前实现对非 `local_only` 的 `routefluent_resolver_group` 禁用 sing-box 外层 DNS cache，让每次 outbound server 解析都进入解析组状态机，从而避免 local fallback 缓存压住已恢复的 DoH；`local_only` 模式仍允许正常缓存，因为它不是临时 fallback。
+当 `rf-resolver-vendor-a` 的 DoH 恢复 healthy 后，该组内旧的 local fallback 缓存项必须不再命中。当前实现使用 sing-box `v1.14.2` 的 `adapter.DNSTransportWithEnvironment`：resolver group 把 primary 的健康状态、连续失败/恢复计数和下一次探测时间纳入 cache environment；状态改变时 cache key 随之改变，从而避免旧 fallback 缓存压住恢复后的 DoH。`local_only` 的 environment 保持稳定，因为它不是临时 fallback。
 
 ## DoH 自身域名的 bootstrap
 
@@ -309,7 +309,7 @@ RouteFluent 仍保留服务端预解析 IP 下发能力。sing-box 侧新增能�
 3. 新增 `dns/transport/routefluentgroup` 包，包装已有 `adapter.DNSTransport`。
 4. wrapper 内维护 primary DoH 的健康状态、probe 定时器和 fallback 证据。
 5. outbound 仍使用原生 `domain_resolver.server` 绑定该 wrapper tag。
-6. 新增 `adapter.DNSCacheControlTransport`，让非 `local_only` 解析组绕开 sing-box 外层 DNS cache，避免恢复后继续命中 fallback 结果。
+6. 实现上游 `adapter.DNSTransportWithEnvironment`，把解析组健康状态纳入 DNS cache key，避免恢复后继续命中旧 fallback 结果。
 7. 不修改 route selector、outbound selector、subscription parser 或代理协议实现。
 
 ## 测试计划
@@ -343,4 +343,4 @@ RouteFluent 仍保留服务端预解析 IP 下发能力。sing-box 侧新增能�
 2. `go test ./...` 通过。
 3. 可通过日志证明 DoH 优先、local 临时 fallback 和 DoH 自动恢复。
 4. 不引入 outbound 自动换线或 route fallback。
-5. 不影响现有 AnyTLS `client` 字段 patch。
+5. 不修改 AnyTLS 协议实现；客户端伪装只使用上游 `client_metadata`。

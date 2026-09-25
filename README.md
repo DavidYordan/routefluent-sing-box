@@ -1,30 +1,31 @@
 # RouteFluent sing-box
 
-Controlled sing-box build used by RouteFluent when a route explicitly requires the AnyTLS outbound `client` field or RouteFluent's provider-scoped DNS resolver group.
+RouteFluent 的受控制品构建仓库。它以固定的上游 sing-box 版本为基线，只维护 RouteFluent 尚未被上游覆盖的窄范围 DNS 能力；AnyTLS 客户端元数据使用上游正式字段 `client_metadata`，不再维护私有 `client` 字段。
 
-This repository does not maintain a broad sing-box fork. It is a deterministic build wrapper that:
+该仓库会：
 
-1. clones exact upstream sources,
-2. verifies exact commits,
-3. applies narrow RouteFluent patches,
-4. builds a Linux amd64 binary,
-5. writes a machine-readable build manifest,
-6. publishes release assets through GitHub Actions.
+1. 克隆并核对精确的上游 sing-box tag 与 commit；
+2. 应用 RouteFluent DNS resolver group 与严格 `check` 生命周期补丁；
+3. 构建静态 Linux amd64 二进制；
+4. 输出可机读、带哈希的构建 manifest；
+5. 通过 GitHub Actions 校验并发布不可变制品。
 
-## Build Inputs
+## 构建输入
 
-| Input | Value |
+| 输入 | 值 |
 | --- | --- |
-| sing-box | `v1.13.12` / `1086ab2563320e0da0c23b3a491d8dfa0939dff4` |
-| sing-anytls | `v0.0.11` / `130d2e61b8895727bfed4942c535e91b246a9603` |
-| RouteFluent patch id | `routefluent-anytls-client-dns-resolver-group-check-v1` |
-| Version name | `1.13.12-routefluent-anytls-client.7` |
-| Default tags | `with_utls with_clash_api` |
-| Target | `linux/amd64`, `CGO_ENABLED=0` |
+| sing-box | `v1.14.2` / `af6e64c3b69e6132ebaee0e1a3d24e93903f6709` |
+| sing-anytls（上游依赖） | `v0.0.11` / `130d2e61b8895727bfed4942c535e91b246a9603` |
+| RouteFluent patch id | `routefluent-dns-resolver-group-check-v2` |
+| 版本名 | `1.14.2-routefluent-dns.1` |
+| 默认 build tags | `with_utls with_clash_api` |
+| 目标 | `linux/amd64`, `CGO_ENABLED=0` |
 
-## Patch Scope
+## 能力边界
 
-The first patch exposes sing-anytls' client broadcast value through sing-box AnyTLS outbound config:
+### 上游 AnyTLS `client_metadata`
+
+sing-box 1.13.16 起原生支持 AnyTLS `client_metadata`。RouteFluent 编译器只生成这个上游字段：
 
 ```json
 {
@@ -33,21 +34,15 @@ The first patch exposes sing-anytls' client broadcast value through sing-box Any
   "server": "example.com",
   "server_port": 443,
   "password": "secret",
-  "client": "mihomo/1.19.28"
+  "client_metadata": "mihomo/1.19.28"
 }
 ```
 
-If `client` is omitted, sing-anytls keeps its native default behavior.
+旧私有字段 `client` 必须被 `sing-box check -c` 拒绝。设备是否具备该能力以受控二进制的版本证据判定，不再上报 RouteFluent 私有 AnyTLS capability。
 
-RouteFluent still treats this as an explicit runtime capability. A device may only report:
+### RouteFluent resolver group
 
-```text
-sing_box_anytls_client=ok:client_field
-```
-
-after its installed binary passes `sing-box check -c` with an AnyTLS outbound containing the `client` field. Stock sing-box must not report this capability.
-
-The second patch adds a RouteFluent DNS server type:
+补丁增加 `routefluent_resolver_group` DNS server：
 
 ```json
 {
@@ -60,48 +55,39 @@ The second patch adds a RouteFluent DNS server type:
 }
 ```
 
-It is documented in `docs/doh-priority-local-fallback-resolution.md`. The behavior is provider-scoped: configured DoH resolvers are preferred, local host DNS is allowed only as a temporary fallback when every DoH resolver in that group is unavailable, and recovered DoH resolvers automatically become preferred again. A `local_only` mode exists for providers that do not carry DoH.
+详细契约见 [docs/doh-priority-local-fallback-resolution.md](docs/doh-priority-local-fallback-resolution.md)。关键边界如下：
 
-Generator contract:
+- 常规模式必须至少声明一个 primary DoH；
+- 开启 local fallback 时必须显式声明 local resolver 与非空探测域名；
+- 未开启 fallback 时，全部 primary 失效即失败关闭；
+- 无 DoH 的线路必须显式选择 `local_only`；
+- outbound 的域名解析必须显式绑定对应 resolver group；
+- resolver group 的健康状态通过上游 `DNSTransportWithEnvironment` 进入 DNS cache key，健康状态变化会自然淘汰旧 fallback 缓存；
+- `sing-box check` 会执行 pre-start，部署前即验证 resolver 类型和依赖关系。
 
-- regular mode must configure at least one primary DoH server;
-- `fallback_enabled=true` must also configure a local fallback resolver and non-empty `probe_domains`;
-- strict provider-DoH mode must leave `fallback_enabled=false`; when all primary DoH resolvers are unavailable, resolution fails closed;
-- provider lines without DoH must use `mode=local_only`, empty `primary`, and an explicit local fallback;
-- outbounds whose `server` is a domain must bind `domain_resolver.server` to the provider-scoped RouteFluent resolver group;
-- configs that rely on route-level domain resolution should also set `route.default_domain_resolver`;
-- DoH endpoints whose own `server` is a domain must set an explicit bootstrap `domain_resolver`.
+本机 DNS fallback 只是同一 provider resolver group 内的显式可用性策略，不是线路切换、订阅兼容或业务流量 direct 放行。
 
-Debug logging records resolver-group selection, strict failures, fallback use, and recovery probes. Local fallback is an explicit availability policy for the same provider resolver group; it is not route fallback, outbound failover, subscription compatibility, or a data-plane direct bypass.
+## 本地构建与验证
 
-The third patch makes `sing-box check` run the service pre-start lifecycle. This catches RouteFluent DNS transport dependency errors before deployment, including a local resolver used as a DoH primary or a non-local resolver used as fallback.
-
-## Local Build
-
-Prerequisites:
-
-- Git
-- Go
-- Python 3.9+
-
-Run:
+依赖 Git、Go 1.24 和 Python 3.9+：
 
 ```bash
 python build_routefluent_sing_box.py
 ```
 
-Outputs:
+输出：
 
 ```text
 dist/sing-box-linux-amd64
-dist/sing-box-linux-amd64.routefluent-anytls-client.json
+dist/sing-box-linux-amd64.routefluent-dns.json
 ```
 
-Smoke check:
+验证：
 
 ```bash
 ./dist/sing-box-linux-amd64 version
-./dist/sing-box-linux-amd64 check -c testdata/anytls-client-check.json
+./dist/sing-box-linux-amd64 check -c testdata/anytls-client-metadata-check.json
+! ./dist/sing-box-linux-amd64 check -c testdata/anytls-legacy-client-rejected.json
 ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-resolver-group-check.json
 ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-doh-bootstrap-check.json
 ! ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-invalid-primary-local.json
@@ -110,90 +96,61 @@ Smoke check:
 python3 scripts/routefluent_dns_runtime_smoke.py --sing-box ./dist/sing-box-linux-amd64
 ```
 
-Expected version string includes:
+版本输出必须包含：
 
 ```text
-1.13.12-routefluent-anytls-client.7
+1.14.2-routefluent-dns.1
 ```
 
 ## GitHub Release
 
-`.github/workflows/release.yml` is the active GitHub Actions workflow. `docs/release-workflow.yml` is kept as a readable copy for downstream audits.
+`.github/workflows/release.yml` 是实际发布流程；`docs/release-workflow.yml` 是审计副本。`v*` tag 会触发构建、静态配置校验、DNS runtime smoke、checksum 生成和 GitHub Release 发布。
 
-Tags matching `v*` trigger the release workflow. The workflow builds the Linux amd64 binary, runs the static RouteFluent check fixtures, runs the local runtime DNS smoke, writes checksums, and publishes the immutable release assets.
-
-Recommended tag:
+当前 tag：
 
 ```bash
-git tag v1.13.12-routefluent-anytls-client.7
-git push origin v1.13.12-routefluent-anytls-client.7
+git tag v1.14.2-routefluent-dns.1
+git push origin v1.14.2-routefluent-dns.1
 ```
 
-Release assets:
+发布资产：
 
 - `sing-box-linux-amd64`
-- `sing-box-linux-amd64.routefluent-anytls-client.json`
+- `sing-box-linux-amd64.routefluent-dns.json`
 - `SHA256SUMS`
 
-Pushing workflow changes from a local GitHub CLI session requires the `workflow` OAuth scope. Browser edits use the browser GitHub session instead.
+## 下游使用
 
-## Use From Another Project
-
-Other projects should consume an immutable release or pin this repository as a submodule. Do not replace a stock sing-box binary with this build unless the target runtime explicitly requires and verifies at least one of these features:
-
-- `anytls_outbound_client_field`
-- `routefluent_dns_resolver_group`
-- `routefluent_dns_check_start_validation`
-
-Release-binary mode:
+发布制品模式：
 
 ```bash
-VERSION=v1.13.12-routefluent-anytls-client.7
+VERSION=v1.14.2-routefluent-dns.1
 BASE=https://github.com/DavidYordan/routefluent-sing-box/releases/download/$VERSION
 
 curl -L -o sing-box-linux-amd64 "$BASE/sing-box-linux-amd64"
-curl -L -o sing-box-linux-amd64.routefluent-anytls-client.json "$BASE/sing-box-linux-amd64.routefluent-anytls-client.json"
+curl -L -o sing-box-linux-amd64.routefluent-dns.json "$BASE/sing-box-linux-amd64.routefluent-dns.json"
 curl -L -o SHA256SUMS "$BASE/SHA256SUMS"
 sha256sum -c SHA256SUMS
 chmod +x sing-box-linux-amd64
 ./sing-box-linux-amd64 version
 ```
 
-Pinned submodule mode:
+RouteFluent 主仓库通过 `third_party/sing-box` 子模块固定此仓库 commit，并校验 release URL、manifest、二进制大小和 SHA256。主路径只接受以下明确能力：
+
+- `upstream_anytls_client_metadata`
+- `routefluent_dns_resolver_group`
+- `routefluent_dns_check_start_validation`
+
+从子模块直接构建：
 
 ```bash
-git submodule add https://github.com/DavidYordan/routefluent-sing-box.git third_party/routefluent-sing-box
-git -C third_party/routefluent-sing-box checkout v1.13.12-routefluent-anytls-client.7
-git add .gitmodules third_party/routefluent-sing-box
-```
-
-Build from the submodule when the consuming project needs to produce its own artifact:
-
-```bash
-python third_party/routefluent-sing-box/build_routefluent_sing_box.py \
+python third_party/sing-box/build_routefluent_sing_box.py \
   --output dist/sing-box-linux-amd64 \
-  --manifest dist/sing-box-linux-amd64.routefluent-anytls-client.json
+  --manifest dist/sing-box-linux-amd64.routefluent-dns.json
 ```
 
-## RouteFluent Submodule Use
+## 兼容边界
 
-RouteFluent consumes this repository as:
+该制品不是订阅解析兼容层，不提供自动换线路、跨 provider fallback 或数据面 direct。RouteFluent 编译器和 Deploy 路径仍会在字段、版本、manifest 或运行证据不一致时失败关闭。
 
-```bash
-git submodule update --init --recursive third_party/sing-box
-```
-
-The RouteFluent build scripts pass explicit output and manifest paths, so the same build script works both standalone and as a submodule.
-
-## Compatibility Boundary
-
-This binary exists for controlled RouteFluent runtime gaps that stock sing-box does not expose:
-
-- providers whose AnyTLS servers reject stock sing-anytls' native client broadcast but accept `mihomo/1.19.28`;
-- outbound server-domain resolution that must prefer provider DoH, temporarily fall back to local DNS only when all DoH resolvers in that group are unavailable, and recover back to DoH.
-
-It is not a subscription parser compatibility layer, not an automatic provider fallback, and not a data-plane failover mechanism. RouteFluent's compiler and deploy path remain fail-closed unless the route config explicitly chooses a patched capability and the target device reports that capability.
-
-## Upstream Licenses
-
-The binary is built from upstream sing-box and sing-anytls sources at the commits listed above. Their upstream licenses apply to the generated binary and patched source. This repository provides the deterministic build automation and patch procedure needed to reproduce the distributed artifacts.
+生成二进制所包含的上游 sing-box 与 sing-anytls 继续适用各自许可证；本仓库负责可复现构建和 RouteFluent 窄补丁。

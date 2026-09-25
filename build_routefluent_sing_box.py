@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Build RouteFluent's controlled sing-box binary.
 
-The patch is intentionally narrow: it exposes sing-anytls' client broadcast
-value through sing-box AnyTLS outbound config as `client`. RouteFluent compiler
-and deploy gates remain responsible for deciding when that field may be used.
+Upstream sing-box 1.13.16 and later owns AnyTLS ``client_metadata``.  The
+RouteFluent patch is therefore limited to the provider-scoped DNS resolver
+group and strict ``sing-box check`` pre-start validation.
 """
 
 from __future__ import annotations
@@ -22,16 +22,16 @@ import time
 
 SING_BOX_REPO = "https://github.com/SagerNet/sing-box.git"
 SING_ANYTLS_REPO = "https://github.com/anytls/sing-anytls.git"
-SING_BOX_VERSION = "v1.13.12"
+SING_BOX_VERSION = "v1.14.2"
 SING_ANYTLS_VERSION = "v0.0.11"
-SING_BOX_COMMIT = "1086ab2563320e0da0c23b3a491d8dfa0939dff4"
+SING_BOX_COMMIT = "af6e64c3b69e6132ebaee0e1a3d24e93903f6709"
 SING_ANYTLS_COMMIT = "130d2e61b8895727bfed4942c535e91b246a9603"
 REPO_ROOT = Path(__file__).resolve().parent
-PATCH_ID = "routefluent-anytls-client-dns-resolver-group-check-v1"
-FEATURE_ANYTLS_CLIENT_FIELD = "anytls_outbound_client_field"
+PATCH_ID = "routefluent-dns-resolver-group-check-v2"
+FEATURE_UPSTREAM_ANYTLS_CLIENT_METADATA = "upstream_anytls_client_metadata"
 FEATURE_ROUTEFLUENT_DNS_RESOLVER_GROUP = "routefluent_dns_resolver_group"
 FEATURE_ROUTEFLUENT_DNS_CHECK_START_VALIDATION = "routefluent_dns_check_start_validation"
-PATCHED_SING_BOX_VERSION = "1.13.12-routefluent-anytls-client.7"
+PATCHED_SING_BOX_VERSION = "1.14.2-routefluent-dns.1"
 DEFAULT_TAGS = "with_utls with_clash_api"
 
 
@@ -51,6 +51,8 @@ def run(args: list[str], cwd: Path | None = None, env: dict[str, str] | None = N
         cwd=str(cwd) if cwd else None,
         env=env,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     )
@@ -123,59 +125,6 @@ def copy_patch_file(source_dir: Path, relative_path: str) -> None:
     shutil.copyfile(source, target)
 
 
-def patch_sing_anytls(source_dir: Path) -> None:
-    replace_once(
-        source_dir / "client.go",
-        "type ClientConfig struct {\n\tPassword                 string\n",
-        "type ClientConfig struct {\n\tPassword                 string\n\tClient                   string\n",
-    )
-    replace_once(
-        source_dir / "client.go",
-        "c.sessionClient = session.NewClient(ctx, config.Logger, c.createOutboundConnection, &c.padding, config.IdleSessionCheckInterval, config.IdleSessionTimeout, config.MinIdleSession)",
-        "c.sessionClient = session.NewClient(ctx, config.Logger, c.createOutboundConnection, config.Client, &c.padding, config.IdleSessionCheckInterval, config.IdleSessionTimeout, config.MinIdleSession)",
-    )
-    replace_once(
-        source_dir / "session" / "client.go",
-        "\tdialOut util.DialOutFunc\n\n\tsessionCounter atomic.Uint64\n",
-        "\tdialOut util.DialOutFunc\n\tclient  string\n\n\tsessionCounter atomic.Uint64\n",
-    )
-    replace_once(
-        source_dir / "session" / "client.go",
-        "func NewClient(ctx context.Context, logger logger.Logger, dialOut util.DialOutFunc,\n\t_padding *atomic.TypedValue[*padding.PaddingFactory], idleSessionCheckInterval, idleSessionTimeout time.Duration, minIdleSession int,\n) *Client {",
-        "func NewClient(ctx context.Context, logger logger.Logger, dialOut util.DialOutFunc,\n\tclient string, _padding *atomic.TypedValue[*padding.PaddingFactory], idleSessionCheckInterval, idleSessionTimeout time.Duration, minIdleSession int,\n) *Client {",
-    )
-    replace_once(
-        source_dir / "session" / "client.go",
-        "\t\tdialOut:            dialOut,\n\t\tpadding:            _padding,\n",
-        "\t\tdialOut:            dialOut,\n\t\tclient:             client,\n\t\tpadding:            _padding,\n",
-    )
-    replace_once(
-        source_dir / "session" / "client.go",
-        "\tsession := NewClientSession(underlying, c.padding, c.logger)\n",
-        "\tsession := NewClientSession(underlying, c.client, c.padding, c.logger)\n",
-    )
-    replace_once(
-        source_dir / "session" / "session.go",
-        "\t// client\n\tisClient    bool\n",
-        "\t// client\n\tclient      string\n\tisClient    bool\n",
-    )
-    replace_once(
-        source_dir / "session" / "session.go",
-        "func NewClientSession(conn net.Conn, _padding *atomic.TypedValue[*padding.PaddingFactory], logger logger.Logger) *Session {\n",
-        "func NewClientSession(conn net.Conn, client string, _padding *atomic.TypedValue[*padding.PaddingFactory], logger logger.Logger) *Session {\n",
-    )
-    replace_once(
-        source_dir / "session" / "session.go",
-        "\t\tconn:        conn,\n\t\tisClient:    true,\n",
-        "\t\tconn:        conn,\n\t\tclient:      client,\n\t\tisClient:    true,\n",
-    )
-    replace_once(
-        source_dir / "session" / "session.go",
-        "\tsettings := util.StringMap{\n\t\t\"v\":           \"2\",\n\t\t\"client\":      util.Verison,\n\t\t\"padding-md5\": s.padding.Load().Md5,\n\t}\n",
-        "\tclient := s.client\n\tif client == \"\" {\n\t\tclient = util.Verison\n\t}\n\tsettings := util.StringMap{\n\t\t\"v\":           \"2\",\n\t\t\"client\":      client,\n\t\t\"padding-md5\": s.padding.Load().Md5,\n\t}\n",
-    )
-
-
 def patch_sing_box(source_dir: Path) -> None:
     replace_once(
         source_dir / "cmd" / "sing-box" / "cmd_check.go",
@@ -186,30 +135,6 @@ def patch_sing_box(source_dir: Path) -> None:
         source_dir / "constant" / "dns.go",
         '\tDNSTypeTailscale   = "tailscale"\n',
         '\tDNSTypeTailscale                = "tailscale"\n\tDNSTypeRouteFluentResolverGroup = "routefluent_resolver_group"\n',
-    )
-    replace_once(
-        source_dir / "adapter" / "dns.go",
-        "type LegacyDNSTransport interface {\n\tLegacyStrategy() C.DomainStrategy\n",
-        "type DNSCacheControlTransport interface {\n\tDisableDNSCache() bool\n}\n\n"
-        "type LegacyDNSTransport interface {\n\tLegacyStrategy() C.DomainStrategy\n",
-    )
-    replace_once(
-        source_dir / "dns" / "client.go",
-        "\tdisableCache := !isSimpleRequest || c.disableCache || options.DisableCache\n\tif !disableCache {\n",
-        "\tdisableCache := !isSimpleRequest || c.disableCache || options.DisableCache\n"
-        "\tif cacheControlTransport, ok := transport.(adapter.DNSCacheControlTransport); ok && cacheControlTransport.DisableDNSCache() {\n"
-        "\t\tdisableCache = true\n"
-        "\t}\n"
-        "\tif !disableCache {\n",
-    )
-    replace_once(
-        source_dir / "dns" / "client.go",
-        "\tdisableCache := c.disableCache || options.DisableCache\n\tif !disableCache {\n",
-        "\tdisableCache := c.disableCache || options.DisableCache\n"
-        "\tif cacheControlTransport, ok := transport.(adapter.DNSCacheControlTransport); ok && cacheControlTransport.DisableDNSCache() {\n"
-        "\t\tdisableCache = true\n"
-        "\t}\n"
-        "\tif !disableCache {\n",
     )
     replace_once(
         source_dir / "option" / "dns.go",
@@ -235,40 +160,40 @@ def patch_sing_box(source_dir: Path) -> None:
     )
     replace_once(
         source_dir / "include" / "registry.go",
-        "\tlocal.RegisterTransport(registry)\n\tfakeip.RegisterTransport(registry)\n",
-        "\tlocal.RegisterTransport(registry)\n\troutefluentgroup.RegisterTransport(registry)\n\tfakeip.RegisterTransport(registry)\n",
+        "\tlocal.RegisterTransport(registry)\n",
+        "\tlocal.RegisterTransport(registry)\n\troutefluentgroup.RegisterTransport(registry)\n",
     )
     copy_patch_file(source_dir, "dns/transport/routefluentgroup/routefluentgroup.go")
     copy_patch_file(source_dir, "dns/transport/routefluentgroup/routefluentgroup_test.go")
-    replace_once(
-        source_dir / "option" / "anytls.go",
-        "\tPassword                 string             `json:\"password,omitempty\"`\n",
-        "\tPassword                 string             `json:\"password,omitempty\"`\n\tClient                   string             `json:\"client,omitempty\"`\n",
-    )
-    replace_once(
-        source_dir / "protocol" / "anytls" / "outbound.go",
-        "\t\tPassword:                 options.Password,\n",
-        "\t\tPassword:                 options.Password,\n\t\tClient:                   options.Client,\n",
-    )
+
+
+def verify_sing_anytls_dependency(sing_box_dir: Path, sing_anytls_dir: Path) -> None:
+    go_mod = (sing_box_dir / "go.mod").read_text(encoding="utf-8")
+    expected_requirement = f"github.com/anytls/sing-anytls {SING_ANYTLS_VERSION}"
+    if expected_requirement not in go_mod:
+        raise RuntimeError(
+            f"sing-box {SING_BOX_VERSION} does not require the controlled dependency {expected_requirement}"
+        )
+    actual = run([require_tool("git"), "rev-parse", "HEAD"], cwd=sing_anytls_dir).strip()
+    if actual != SING_ANYTLS_COMMIT:
+        raise RuntimeError(
+            f"sing-anytls {SING_ANYTLS_VERSION} resolved to {actual}, expected {SING_ANYTLS_COMMIT}"
+        )
 
 
 def build(args: argparse.Namespace) -> None:
     workdir = Path(args.workdir).resolve()
     src_root = workdir / "src"
     sing_box_dir = src_root / f"sing-box-{SING_BOX_VERSION.removeprefix('v')}"
-    sing_anytls_dir = src_root / f"sing-anytls-{SING_ANYTLS_VERSION.removeprefix('v')}-routefluent-client"
+    sing_anytls_dir = src_root / f"sing-anytls-{SING_ANYTLS_VERSION.removeprefix('v')}"
 
     clone_exact(SING_BOX_REPO, SING_BOX_VERSION, SING_BOX_COMMIT, sing_box_dir)
     clone_exact(SING_ANYTLS_REPO, SING_ANYTLS_VERSION, SING_ANYTLS_COMMIT, sing_anytls_dir)
-
-    patch_sing_anytls(sing_anytls_dir)
+    verify_sing_anytls_dependency(sing_box_dir, sing_anytls_dir)
     patch_sing_box(sing_box_dir)
 
     go = require_tool("go")
-    run([go, "fmt", "./..."], cwd=sing_anytls_dir)
-    run([go, "fmt", "./adapter", "./cmd/sing-box", "./constant", "./dns", "./dns/transport/routefluentgroup", "./include", "./option", "./protocol/anytls"], cwd=sing_box_dir)
-    replace_path = os.path.relpath(sing_anytls_dir, sing_box_dir).replace(os.sep, "/")
-    run([go, "mod", "edit", f"-replace=github.com/anytls/sing-anytls={replace_path}"], cwd=sing_box_dir)
+    run([go, "fmt", "./cmd/sing-box", "./constant", "./dns/transport/routefluentgroup", "./include", "./option"], cwd=sing_box_dir)
 
     output = Path(args.output).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -293,7 +218,7 @@ def build(args: argparse.Namespace) -> None:
         "name": "sing-box",
         "patch_id": PATCH_ID,
         "features": [
-            FEATURE_ANYTLS_CLIENT_FIELD,
+            FEATURE_UPSTREAM_ANYTLS_CLIENT_METADATA,
             FEATURE_ROUTEFLUENT_DNS_RESOLVER_GROUP,
             FEATURE_ROUTEFLUENT_DNS_CHECK_START_VALIDATION,
         ],
@@ -322,10 +247,10 @@ def build(args: argparse.Namespace) -> None:
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Build RouteFluent patched sing-box with AnyTLS client field support.")
+    parser = argparse.ArgumentParser(description="Build RouteFluent sing-box with the controlled DNS resolver patch.")
     default_workdir = Path(__file__).resolve().parent / "work"
     default_output = Path(__file__).resolve().parent / "dist" / "sing-box-linux-amd64"
-    default_manifest = Path(__file__).resolve().parent / "dist" / "sing-box-linux-amd64.routefluent-anytls-client.json"
+    default_manifest = Path(__file__).resolve().parent / "dist" / "sing-box-linux-amd64.routefluent-dns.json"
     parser.add_argument("--workdir", default=str(default_workdir))
     parser.add_argument("--output", default=str(default_output))
     parser.add_argument("--manifest", default=str(default_manifest))
