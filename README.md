@@ -5,7 +5,7 @@ RouteFluent 的受控制品构建仓库。它以固定的上游 sing-box 版本�
 该仓库会：
 
 1. 克隆并核对精确的上游 sing-box tag 与 commit；
-2. 应用 RouteFluent DNS resolver group 与严格 `check` 生命周期补丁；
+2. 应用 RouteFluent DNS resolver group、LineAsset 入口 binding transport 与严格 `check` 生命周期补丁；
 3. 构建静态 Linux amd64 二进制；
 4. 输出可机读、带哈希的构建 manifest；
 5. 通过 GitHub Actions 校验并发布不可变制品。
@@ -16,8 +16,8 @@ RouteFluent 的受控制品构建仓库。它以固定的上游 sing-box 版本�
 | --- | --- |
 | sing-box | `v1.14.2` / `af6e64c3b69e6132ebaee0e1a3d24e93903f6709` |
 | sing-anytls（上游依赖） | `v0.0.11` / `130d2e61b8895727bfed4942c535e91b246a9603` |
-| RouteFluent patch id | `routefluent-dns-resolver-group-check-v2` |
-| 版本名 | `1.14.2-routefluent-dns.1` |
+| RouteFluent patch id | `routefluent-dns-ingress-binding-check-v3` |
+| 版本名 | `1.14.2-routefluent-dns.2` |
 | 默认 build tags | `with_utls with_clash_api` |
 | 目标 | `linux/amd64`, `CGO_ENABLED=0` |
 
@@ -67,6 +67,10 @@ sing-box 1.13.16 起原生支持 AnyTLS `client_metadata`。RouteFluent 编译�
 
 本机 DNS fallback 只是同一 provider resolver group 内的显式可用性策略，不是线路切换、订阅兼容或业务流量 direct 放行。
 
+### RouteFluent LineAsset 入口 binding
+
+`routefluent_ingress_binding` 是每个已部署 LineAsset 独立的 DNS-shaped transport。它读取 Agent 原子提交的单一 binding current：`resolver` 委托给资产既定 resolver，`explicit_ipv4` 只为该资产的 logical domain 返回当前一个 IPv4。`binding_revision` 进入 DNS cache environment；地址簿和历史候选不会进入 sing-box 配置，也不会形成 try-next。
+
 ## 本地构建与验证
 
 依赖 Git、Go 1.24 和 Python 3.9+：
@@ -90,6 +94,7 @@ dist/sing-box-linux-amd64.routefluent-dns.json
 ! ./dist/sing-box-linux-amd64 check -c testdata/anytls-legacy-client-rejected.json
 ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-resolver-group-check.json
 ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-doh-bootstrap-check.json
+./dist/sing-box-linux-amd64 check -c testdata/routefluent-ingress-binding-check.json
 ! ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-invalid-primary-local.json
 ! ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-invalid-fallback-https.json
 ! ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-invalid-fallback-missing-probes.json
@@ -99,7 +104,7 @@ python3 scripts/routefluent_dns_runtime_smoke.py --sing-box ./dist/sing-box-linu
 版本输出必须包含：
 
 ```text
-1.14.2-routefluent-dns.1
+1.14.2-routefluent-dns.2
 ```
 
 ## GitHub Release
@@ -109,8 +114,8 @@ python3 scripts/routefluent_dns_runtime_smoke.py --sing-box ./dist/sing-box-linu
 当前 tag：
 
 ```bash
-git tag v1.14.2-routefluent-dns.1
-git push origin v1.14.2-routefluent-dns.1
+git tag v1.14.2-routefluent-dns.2
+git push origin v1.14.2-routefluent-dns.2
 ```
 
 发布资产：
@@ -124,7 +129,7 @@ git push origin v1.14.2-routefluent-dns.1
 发布制品模式：
 
 ```bash
-VERSION=v1.14.2-routefluent-dns.1
+VERSION=v1.14.2-routefluent-dns.2
 BASE=https://github.com/DavidYordan/routefluent-sing-box/releases/download/$VERSION
 
 curl -L -o sing-box-linux-amd64 "$BASE/sing-box-linux-amd64"
@@ -139,6 +144,7 @@ RouteFluent 主仓库通过 `third_party/sing-box` 子模块固定此仓库 comm
 
 - `upstream_anytls_client_metadata`
 - `routefluent_dns_resolver_group`
+- `routefluent_ingress_binding`
 - `routefluent_dns_check_start_validation`
 
 从子模块直接构建：
