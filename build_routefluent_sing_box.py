@@ -3,7 +3,8 @@
 
 Upstream sing-box 1.13.16 and later owns AnyTLS ``client_metadata``.  The
 RouteFluent patch is therefore limited to the provider-scoped DNS resolver
-group and strict ``sing-box check`` pre-start validation.
+group, the Device/LineAsset ingress-binding transport, and strict
+``sing-box check`` pre-start validation.
 """
 
 from __future__ import annotations
@@ -27,11 +28,12 @@ SING_ANYTLS_VERSION = "v0.0.11"
 SING_BOX_COMMIT = "af6e64c3b69e6132ebaee0e1a3d24e93903f6709"
 SING_ANYTLS_COMMIT = "130d2e61b8895727bfed4942c535e91b246a9603"
 REPO_ROOT = Path(__file__).resolve().parent
-PATCH_ID = "routefluent-dns-resolver-group-check-v2"
+PATCH_ID = "routefluent-dns-ingress-binding-check-v3"
 FEATURE_UPSTREAM_ANYTLS_CLIENT_METADATA = "upstream_anytls_client_metadata"
 FEATURE_ROUTEFLUENT_DNS_RESOLVER_GROUP = "routefluent_dns_resolver_group"
+FEATURE_ROUTEFLUENT_INGRESS_BINDING = "routefluent_ingress_binding"
 FEATURE_ROUTEFLUENT_DNS_CHECK_START_VALIDATION = "routefluent_dns_check_start_validation"
-PATCHED_SING_BOX_VERSION = "1.14.2-routefluent-dns.1"
+PATCHED_SING_BOX_VERSION = "1.14.2-routefluent-dns.2"
 DEFAULT_TAGS = "with_utls with_clash_api"
 
 
@@ -134,7 +136,9 @@ def patch_sing_box(source_dir: Path) -> None:
     replace_once(
         source_dir / "constant" / "dns.go",
         '\tDNSTypeTailscale   = "tailscale"\n',
-        '\tDNSTypeTailscale                = "tailscale"\n\tDNSTypeRouteFluentResolverGroup = "routefluent_resolver_group"\n',
+        '\tDNSTypeTailscale                 = "tailscale"\n'
+        '\tDNSTypeRouteFluentResolverGroup  = "routefluent_resolver_group"\n'
+        '\tDNSTypeRouteFluentIngressBinding = "routefluent_ingress_binding"\n',
     )
     replace_once(
         source_dir / "option" / "dns.go",
@@ -151,20 +155,31 @@ def patch_sing_box(source_dir: Path) -> None:
         "\tProbeInterval            badoption.Duration `json:\"probe_interval,omitempty\"`\n"
         "\tUnhealthyCooldown        badoption.Duration `json:\"unhealthy_cooldown,omitempty\"`\n"
         "\tFallbackTTLCap           badoption.Duration `json:\"fallback_ttl_cap,omitempty\"`\n"
+        "}\n\n"
+        "type RouteFluentIngressBindingDNSServerOptions struct {\n"
+        "\tBindingFile   string `json:\"binding_file\"`\n"
+        "\tLogicalDomain string `json:\"logical_domain\"`\n"
+        "\tResolver      string `json:\"resolver\"`\n"
         "}\n",
     )
     replace_once(
         source_dir / "include" / "registry.go",
         '\t"github.com/sagernet/sing-box/dns/transport/local"\n',
-        '\t"github.com/sagernet/sing-box/dns/transport/local"\n\t"github.com/sagernet/sing-box/dns/transport/routefluentgroup"\n',
+        '\t"github.com/sagernet/sing-box/dns/transport/local"\n'
+        '\t"github.com/sagernet/sing-box/dns/transport/routefluentbinding"\n'
+        '\t"github.com/sagernet/sing-box/dns/transport/routefluentgroup"\n',
     )
     replace_once(
         source_dir / "include" / "registry.go",
         "\tlocal.RegisterTransport(registry)\n",
-        "\tlocal.RegisterTransport(registry)\n\troutefluentgroup.RegisterTransport(registry)\n",
+        "\tlocal.RegisterTransport(registry)\n"
+        "\troutefluentbinding.RegisterTransport(registry)\n"
+        "\troutefluentgroup.RegisterTransport(registry)\n",
     )
     copy_patch_file(source_dir, "dns/transport/routefluentgroup/routefluentgroup.go")
     copy_patch_file(source_dir, "dns/transport/routefluentgroup/routefluentgroup_test.go")
+    copy_patch_file(source_dir, "dns/transport/routefluentbinding/routefluentbinding.go")
+    copy_patch_file(source_dir, "dns/transport/routefluentbinding/routefluentbinding_test.go")
 
 
 def verify_sing_anytls_dependency(sing_box_dir: Path, sing_anytls_dir: Path) -> None:
@@ -193,7 +208,7 @@ def build(args: argparse.Namespace) -> None:
     patch_sing_box(sing_box_dir)
 
     go = require_tool("go")
-    run([go, "fmt", "./cmd/sing-box", "./constant", "./dns/transport/routefluentgroup", "./include", "./option"], cwd=sing_box_dir)
+    run([go, "fmt", "./cmd/sing-box", "./constant", "./dns/transport/routefluentbinding", "./dns/transport/routefluentgroup", "./include", "./option"], cwd=sing_box_dir)
 
     output = Path(args.output).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -220,6 +235,7 @@ def build(args: argparse.Namespace) -> None:
         "features": [
             FEATURE_UPSTREAM_ANYTLS_CLIENT_METADATA,
             FEATURE_ROUTEFLUENT_DNS_RESOLVER_GROUP,
+            FEATURE_ROUTEFLUENT_INGRESS_BINDING,
             FEATURE_ROUTEFLUENT_DNS_CHECK_START_VALIDATION,
         ],
         "sing_box_version": SING_BOX_VERSION,

@@ -35,6 +35,7 @@ jobs:
           fi
           ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-resolver-group-check.json
           ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-doh-bootstrap-check.json
+          ./dist/sing-box-linux-amd64 check -c testdata/routefluent-ingress-binding-check.json
           if ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-invalid-primary-local.json; then
             echo "invalid local primary resolver unexpectedly passed"
             exit 1

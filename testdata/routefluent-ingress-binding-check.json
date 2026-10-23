@@ -1,0 +1,36 @@
+{
+  "log": { "disabled": true },
+  "dns": {
+    "servers": [
+      { "type": "local", "tag": "local-system" },
+      {
+        "type": "routefluent_resolver_group",
+        "tag": "asset-resolver",
+        "mode": "local_only",
+        "fallback": "local-system",
+        "fallback_enabled": true
+      },
+      {
+        "type": "routefluent_ingress_binding",
+        "tag": "ingress-binding-7",
+        "binding_file": "/var/lib/routefluent/state/provider-ingress/bindings/line-7.json",
+        "logical_domain": "edge.example.com",
+        "resolver": "asset-resolver"
+      }
+    ],
+    "final": "ingress-binding-7"
+  },
+  "inbounds": [
+    { "type": "socks", "tag": "socks", "listen": "127.0.0.1", "listen_port": 1080 }
+  ],
+  "outbounds": [
+    {
+      "type": "socks",
+      "tag": "proxy",
+      "server": "edge.example.com",
+      "server_port": 1080,
+      "domain_resolver": { "server": "ingress-binding-7", "strategy": "ipv4_only" }
+    }
+  ],
+  "route": { "final": "proxy" }
+}
