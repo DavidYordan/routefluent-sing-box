@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	bindingSchema = "routefluent.device_line_ingress_binding.v1"
+	bindingSchema = "rf.device_line_ingress_binding.v1"
 	modeResolver  = "resolver"
 	modeExplicit  = "explicit_ipv4"
 	maximumBytes  = 64 << 10

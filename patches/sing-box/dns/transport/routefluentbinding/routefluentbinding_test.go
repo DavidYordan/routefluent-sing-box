@@ -1,6 +1,7 @@
 package routefluentbinding
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -50,6 +51,28 @@ func TestExplicitBindingKeepsOtherDomainOutOfPrivateAnswer(t *testing.T) {
 	request.SetQuestion("other.example.com.", mDNS.TypeA)
 	if _, err := transport.Exchange(context.Background(), request); err == nil {
 		t.Fatal("an unrelated domain was answered from the explicit binding")
+	}
+}
+
+func TestRetiredBindingSchemaIsRejected(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "line-7.json")
+	writeBinding(t, path, "explicit_ipv4", `"1.1.1.1"`, 1)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw = bytes.Replace(raw, []byte(`"schema":"rf.device_line_ingress_binding.v1"`), []byte(`"schema":"routefluent.device_line_ingress_binding.v1"`), 1)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	transport := &Transport{
+		TransportAdapter: dns.NewTransportAdapter("routefluent_ingress_binding", "ingress-binding-7", nil),
+		bindingFile:      path, logicalDomain: "edge.example.com", queryName: "edge.example.com",
+	}
+	request := new(mDNS.Msg)
+	request.SetQuestion("edge.example.com.", mDNS.TypeA)
+	if _, err := transport.Exchange(context.Background(), request); err == nil {
+		t.Fatal("retired binding schema was accepted")
 	}
 }
 
@@ -105,7 +128,7 @@ func writeBinding(t *testing.T, path, mode, ipv4 string, revision uint64) {
 	if mode == "resolver" {
 		ipv4 = "null"
 	}
-	raw := []byte(`{"schema":"routefluent.device_line_ingress_binding.v1","tenant_id":3,"device_id":8,"line_asset_id":7,"endpoint_family_id":11,"logical_domain":"edge.example.com","mode":"` + mode + `","connect_ipv4":` + ipv4 + `,"binding_revision":` + strconv.FormatUint(revision, 10) + `,"last_server_choice_revision":1,"source":"server","updated_at":"2026-10-23T00:00:00Z"}`)
+	raw := []byte(`{"schema":"rf.device_line_ingress_binding.v1","tenant_id":3,"device_id":8,"line_asset_id":7,"endpoint_family_id":11,"logical_domain":"edge.example.com","mode":"` + mode + `","connect_ipv4":` + ipv4 + `,"binding_revision":` + strconv.FormatUint(revision, 10) + `,"last_server_choice_revision":1,"source":"server","updated_at":"2026-10-23T00:00:00Z"}`)
 	if err := os.WriteFile(path, raw, 0o600); err != nil {
 		t.Fatal(err)
 	}
