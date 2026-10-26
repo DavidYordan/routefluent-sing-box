@@ -15,6 +15,7 @@
         "tag": "ingress-binding-7",
         "binding_file": "/var/lib/routefluent/state/provider-ingress/bindings/line-7.json",
         "logical_domain": "edge.example.com",
+        "query_name": "entry.example.net",
         "resolver": "asset-resolver"
       }
     ],

@@ -16,8 +16,8 @@ RouteFluent 的受控制品构建仓库。它以固定的上游 sing-box 版本�
 | --- | --- |
 | sing-box | `v1.14.2` / `af6e64c3b69e6132ebaee0e1a3d24e93903f6709` |
 | sing-anytls（上游依赖） | `v0.0.11` / `130d2e61b8895727bfed4942c535e91b246a9603` |
-| RouteFluent patch id | `routefluent-dns-ingress-binding-check-v3` |
-| 版本名 | `1.14.2-routefluent-dns.2` |
+| RouteFluent patch id | `routefluent-dns-query-recipe-check-v4` |
+| 版本名 | `1.14.2-routefluent-dns.3` |
 | 默认 build tags | `with_utls with_clash_api` |
 | 目标 | `linux/amd64`, `CGO_ENABLED=0` |
 
@@ -69,7 +69,7 @@ sing-box 1.13.16 起原生支持 AnyTLS `client_metadata`。RouteFluent 编译�
 
 ### RouteFluent LineAsset 入口 binding
 
-`routefluent_ingress_binding` 是每个已部署 LineAsset 独立的 DNS-shaped transport。它读取 Agent 原子提交的单一 binding current：`resolver` 委托给资产既定 resolver，`explicit_ipv4` 只为该资产的 logical domain 返回当前一个 IPv4。`binding_revision` 进入 DNS cache environment；地址簿和历史候选不会进入 sing-box 配置，也不会形成 try-next。
+`routefluent_ingress_binding` 是每个已部署 LineAsset 独立的 DNS-shaped transport。它读取 Agent 原子提交的单一 binding current：`resolver` 按可选 `query_name`（缺省为 logical domain）委托给资产既定 resolver，并把答案归还给原 logical domain；`explicit_ipv4` 只为该资产的 logical domain 返回当前一个 IPv4。没有 Provider 关联但存在别名配方时，transport 只执行静态 query-name 改写，不要求虚构 binding current。`binding_revision` 与 query name 进入 DNS cache environment；地址簿和历史候选不会进入 sing-box 配置，也不会形成 try-next。
 
 ## 本地构建与验证
 
@@ -104,7 +104,7 @@ python3 scripts/routefluent_dns_runtime_smoke.py --sing-box ./dist/sing-box-linu
 版本输出必须包含：
 
 ```text
-1.14.2-routefluent-dns.2
+1.14.2-routefluent-dns.3
 ```
 
 ## GitHub Release
@@ -114,8 +114,8 @@ python3 scripts/routefluent_dns_runtime_smoke.py --sing-box ./dist/sing-box-linu
 当前 tag：
 
 ```bash
-git tag v1.14.2-routefluent-dns.2
-git push origin v1.14.2-routefluent-dns.2
+git tag v1.14.2-routefluent-dns.3
+git push origin v1.14.2-routefluent-dns.3
 ```
 
 发布资产：
@@ -129,7 +129,7 @@ git push origin v1.14.2-routefluent-dns.2
 发布制品模式：
 
 ```bash
-VERSION=v1.14.2-routefluent-dns.2
+VERSION=v1.14.2-routefluent-dns.3
 BASE=https://github.com/DavidYordan/routefluent-sing-box/releases/download/$VERSION
 
 curl -L -o sing-box-linux-amd64 "$BASE/sing-box-linux-amd64"

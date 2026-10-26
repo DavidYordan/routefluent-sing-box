@@ -60,6 +60,7 @@ type Transport struct {
 	manager       adapter.DNSTransportManager
 	bindingFile   string
 	logicalDomain string
+	queryName     string
 	resolverTag   string
 
 	access   sync.RWMutex
@@ -71,12 +72,19 @@ func NewTransport(ctx context.Context, _ log.ContextLogger, tag string, options 
 		return nil, E.New("routefluent ingress binding tag is required")
 	}
 	bindingFile := strings.TrimSpace(options.BindingFile)
-	if bindingFile == "" || !filepath.IsAbs(bindingFile) || filepath.Clean(bindingFile) != bindingFile {
+	if bindingFile != "" && (!filepath.IsAbs(bindingFile) || filepath.Clean(bindingFile) != bindingFile) {
 		return nil, E.New("routefluent ingress binding_file must be an absolute clean path")
 	}
 	domain := strings.TrimSpace(options.LogicalDomain)
 	if !canonicalDomain(domain) {
 		return nil, E.New("routefluent ingress logical_domain is invalid")
+	}
+	queryName := strings.TrimSpace(options.QueryName)
+	if queryName == "" {
+		queryName = domain
+	}
+	if !canonicalDomain(queryName) {
+		return nil, E.New("routefluent ingress query_name is invalid")
 	}
 	resolverTag := strings.TrimSpace(options.Resolver)
 	if resolverTag == "" || resolverTag == tag {
@@ -88,7 +96,7 @@ func NewTransport(ctx context.Context, _ log.ContextLogger, tag string, options 
 	}
 	return &Transport{
 		TransportAdapter: boxdns.NewTransportAdapter(C.DNSTypeRouteFluentIngressBinding, tag, []string{resolverTag}),
-		manager:          manager, bindingFile: bindingFile, logicalDomain: domain, resolverTag: resolverTag,
+		manager:          manager, bindingFile: bindingFile, logicalDomain: domain, queryName: queryName, resolverTag: resolverTag,
 	}, nil
 }
 
@@ -118,6 +126,9 @@ func (t *Transport) Reset() {
 }
 
 func (t *Transport) Environment() []string {
+	if t.bindingFile == "" {
+		return []string{"mode=resolver", "query_name=" + t.queryName}
+	}
 	binding, err := t.loadBinding()
 	if err != nil {
 		return []string{"binding=invalid"}
@@ -131,6 +142,7 @@ func (t *Transport) Environment() []string {
 		"binding_revision=" + strconv.FormatUint(binding.BindingRevision, 10),
 		"mode=" + binding.Mode,
 		"connect_ipv4=" + ipv4,
+		"query_name=" + t.queryName,
 	}
 }
 
@@ -138,12 +150,19 @@ func (t *Transport) Exchange(ctx context.Context, message *mDNS.Msg) (*mDNS.Msg,
 	if message == nil || len(message.Question) != 1 {
 		return nil, E.New("routefluent ingress binding requires one DNS question")
 	}
-	binding, err := t.loadBinding()
-	if err != nil {
-		return nil, err
+	var binding bindingCurrent
+	if t.bindingFile != "" {
+		var err error
+		binding, err = t.loadBinding()
+		if err != nil {
+			return nil, err
+		}
 	}
 	question := message.Question[0]
-	if strings.TrimSuffix(strings.ToLower(question.Name), ".") != t.logicalDomain || binding.Mode == modeResolver {
+	if strings.TrimSuffix(strings.ToLower(question.Name), ".") != t.logicalDomain {
+		return nil, E.New("routefluent ingress binding received an unrelated domain")
+	}
+	if t.bindingFile == "" || binding.Mode == modeResolver {
 		return t.exchangeResolver(ctx, message)
 	}
 	response := new(mDNS.Msg)
@@ -173,7 +192,23 @@ func (t *Transport) exchangeResolver(ctx context.Context, message *mDNS.Msg) (*m
 	if resolver == nil {
 		return nil, E.New("routefluent ingress binding resolver is not initialized")
 	}
-	return resolver.Exchange(ctx, message.Copy())
+	request := message.Copy()
+	request.Question[0].Name = mDNS.Fqdn(t.queryName)
+	response, err := resolver.Exchange(ctx, request)
+	if err != nil || response == nil || t.queryName == t.logicalDomain {
+		return response, err
+	}
+	response = response.Copy()
+	response.Id = message.Id
+	response.Question = append([]mDNS.Question(nil), message.Question...)
+	queryFQDN := mDNS.Fqdn(t.queryName)
+	logicalFQDN := mDNS.Fqdn(t.logicalDomain)
+	for _, answer := range response.Answer {
+		if strings.EqualFold(answer.Header().Name, queryFQDN) {
+			answer.Header().Name = logicalFQDN
+		}
+	}
+	return response, nil
 }
 
 func (t *Transport) loadBinding() (bindingCurrent, error) {

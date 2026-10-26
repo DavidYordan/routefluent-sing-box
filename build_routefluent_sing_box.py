@@ -28,12 +28,12 @@ SING_ANYTLS_VERSION = "v0.0.11"
 SING_BOX_COMMIT = "af6e64c3b69e6132ebaee0e1a3d24e93903f6709"
 SING_ANYTLS_COMMIT = "130d2e61b8895727bfed4942c535e91b246a9603"
 REPO_ROOT = Path(__file__).resolve().parent
-PATCH_ID = "routefluent-dns-ingress-binding-check-v3"
+PATCH_ID = "routefluent-dns-query-recipe-check-v4"
 FEATURE_UPSTREAM_ANYTLS_CLIENT_METADATA = "upstream_anytls_client_metadata"
 FEATURE_ROUTEFLUENT_DNS_RESOLVER_GROUP = "routefluent_dns_resolver_group"
 FEATURE_ROUTEFLUENT_INGRESS_BINDING = "routefluent_ingress_binding"
 FEATURE_ROUTEFLUENT_DNS_CHECK_START_VALIDATION = "routefluent_dns_check_start_validation"
-PATCHED_SING_BOX_VERSION = "1.14.2-routefluent-dns.2"
+PATCHED_SING_BOX_VERSION = "1.14.2-routefluent-dns.3"
 DEFAULT_TAGS = "with_utls with_clash_api"
 
 
@@ -199,6 +199,7 @@ def patch_sing_box(source_dir: Path) -> None:
         "type RouteFluentIngressBindingDNSServerOptions struct {\n"
         "\tBindingFile   string `json:\"binding_file\"`\n"
         "\tLogicalDomain string `json:\"logical_domain\"`\n"
+        "\tQueryName     string `json:\"query_name,omitempty\"`\n"
         "\tResolver      string `json:\"resolver\"`\n"
         "}\n",
     )

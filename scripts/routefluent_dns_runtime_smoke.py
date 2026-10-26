@@ -101,6 +101,8 @@ class TargetHandler(http.server.BaseHTTPRequestHandler):
 
 
 class DoHHandler(http.server.BaseHTTPRequestHandler):
+    query_names: list[str] = []
+
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         query = parse_qs(parsed.query)
@@ -118,6 +120,7 @@ class DoHHandler(http.server.BaseHTTPRequestHandler):
         self.write_dns_response(request)
 
     def write_dns_response(self, request: bytes) -> None:
+        self.query_names.append(dns_question_name(request))
         response = dns_a_response(request)
         self.send_response(200)
         self.send_header("content-type", "application/dns-message")
@@ -146,6 +149,23 @@ def dns_a_response(request: bytes) -> bytes:
     header = transaction_id + b"\x81\x80" + b"\x00\x01\x00\x01\x00\x00\x00\x00"
     answer = b"\xc0\x0c" + struct.pack("!HHIH", 1, 1, 30, 4) + socket.inet_aton("127.0.0.1")
     return header + question + answer
+
+
+def dns_question_name(request: bytes) -> str:
+    if len(request) < 13:
+        raise ValueError("DNS request is too short")
+    labels: list[str] = []
+    offset = 12
+    while offset < len(request) and request[offset] != 0:
+        length = request[offset]
+        offset += 1
+        if length == 0 or offset + length > len(request):
+            raise ValueError("DNS question is malformed")
+        labels.append(request[offset:offset + length].decode("ascii"))
+        offset += length
+    if not labels or offset >= len(request):
+        raise ValueError("DNS question is malformed")
+    return ".".join(labels).lower()
 
 
 def free_port() -> int:
@@ -191,6 +211,7 @@ def routefluent_config(
     fallback_enabled: bool,
     fallback: bool,
     http_port: int,
+    query_name: str = "",
 ) -> dict[str, object]:
     primary: dict[str, object] = {
         "tag": "mock-doh",
@@ -224,22 +245,32 @@ def routefluent_config(
         group["unhealthy_cooldown"] = "1s"
         group["fallback_ttl_cap"] = "1s"
     servers.append(group)
+    resolver_tag = "rf-runtime"
+    if query_name:
+        servers.append({
+            "tag": "ingress-binding-7",
+            "type": "routefluent_ingress_binding",
+            "logical_domain": "rf-logical.test",
+            "query_name": query_name,
+            "resolver": "rf-runtime",
+        })
+        resolver_tag = "ingress-binding-7"
     return {
         "log": {"level": "debug", "timestamp": False},
-        "dns": {"servers": servers, "final": "rf-runtime"},
+        "dns": {"servers": servers, "final": resolver_tag},
         "outbounds": [
             {
                 "type": "direct",
                 "tag": "direct",
                 "domain_resolver": {
-                    "server": "rf-runtime",
+                    "server": resolver_tag,
                     "strategy": "ipv4_only",
                 },
             }
         ],
         "route": {
             "default_domain_resolver": {
-                "server": "rf-runtime",
+                "server": resolver_tag,
                 "strategy": "ipv4_only",
             },
             "final": "direct",
@@ -331,6 +362,25 @@ def main() -> int:
                 "primary DoH resolves outbound server domain",
                 run_fetch(sing_box, primary_config, f"http://rf-primary.test:{http_port}/"),
             )
+
+            DoHHandler.query_names.clear()
+            alias_config = temp_dir / "query-name.json"
+            write_config(
+                alias_config,
+                routefluent_config(
+                    doh_port=doh_port,
+                    fallback_enabled=False,
+                    fallback=False,
+                    http_port=http_port,
+                    query_name="rf-alias.test",
+                ),
+            )
+            require_success(
+                "LineAsset recipe resolves query name while dialing logical domain",
+                run_fetch(sing_box, alias_config, f"http://rf-logical.test:{http_port}/"),
+            )
+            if "rf-alias.test" not in DoHHandler.query_names or "rf-logical.test" in DoHHandler.query_names:
+                raise RuntimeError(f"query-name recipe did not reach DoH exactly: {DoHHandler.query_names!r}")
 
             strict_config = temp_dir / "strict.json"
             write_config(
