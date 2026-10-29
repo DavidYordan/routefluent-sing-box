@@ -20,10 +20,10 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24.x"
+          go-version: "1.25.5"
 
       - name: Build
-        run: python3 build_routefluent_sing_box.py
+        run: python3 build_rf_sing_box.py
 
       - name: Smoke check
         run: |
@@ -33,35 +33,35 @@ jobs:
             echo "removed private AnyTLS client field unexpectedly passed"
             exit 1
           fi
-          ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-resolver-group-check.json
-          ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-doh-bootstrap-check.json
-          ./dist/sing-box-linux-amd64 check -c testdata/routefluent-ingress-binding-check.json
-          if ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-invalid-primary-local.json; then
+          ./dist/sing-box-linux-amd64 check -c testdata/rf-dns-resolver-group-check.json
+          ./dist/sing-box-linux-amd64 check -c testdata/rf-dns-doh-bootstrap-check.json
+          ./dist/sing-box-linux-amd64 check -c testdata/rf-ingress-binding-check.json
+          if ./dist/sing-box-linux-amd64 check -c testdata/rf-dns-invalid-primary-local.json; then
             echo "invalid local primary resolver unexpectedly passed"
             exit 1
           fi
-          if ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-invalid-fallback-https.json; then
+          if ./dist/sing-box-linux-amd64 check -c testdata/rf-dns-invalid-fallback-https.json; then
             echo "invalid HTTPS fallback resolver unexpectedly passed"
             exit 1
           fi
-          if ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-invalid-fallback-missing-probes.json; then
+          if ./dist/sing-box-linux-amd64 check -c testdata/rf-dns-invalid-fallback-missing-probes.json; then
             echo "fallback without probe_domains unexpectedly passed"
             exit 1
           fi
-          python3 scripts/routefluent_dns_runtime_smoke.py --sing-box ./dist/sing-box-linux-amd64
+          python3 scripts/rf_dns_runtime_smoke.py --sing-box ./dist/sing-box-linux-amd64
 
       - name: Write checksums
         run: |
           cd dist
-          sha256sum sing-box-linux-amd64 sing-box-linux-amd64.routefluent-dns.json > SHA256SUMS
+          sha256sum sing-box-linux-amd64 sing-box-linux-amd64.rf-dns.json > SHA256SUMS
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: routefluent-sing-box-linux-amd64
+          name: rf-sing-box-linux-amd64
           path: |
             dist/sing-box-linux-amd64
-            dist/sing-box-linux-amd64.routefluent-dns.json
+            dist/sing-box-linux-amd64.rf-dns.json
             dist/SHA256SUMS
 
       - name: Publish GitHub release
@@ -70,5 +70,5 @@ jobs:
         with:
           files: |
             dist/sing-box-linux-amd64
-            dist/sing-box-linux-amd64.routefluent-dns.json
+            dist/sing-box-linux-amd64.rf-dns.json
             dist/SHA256SUMS
