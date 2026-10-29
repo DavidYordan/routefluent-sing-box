@@ -9,11 +9,11 @@
       "tag": "anytls-client-metadata-check",
       "server": "127.0.0.1",
       "server_port": 443,
-      "password": "routefluent-check",
+      "password": "rf-check",
       "client_metadata": "mihomo/1.19.28",
       "tls": {
         "enabled": true,
-        "server_name": "routefluent.invalid",
+        "server_name": "rf.invalid",
         "insecure": true
       }
     },

@@ -1,4 +1,4 @@
-package routefluentgroup
+package rfgroup
 
 import (
 	"context"
@@ -120,7 +120,7 @@ func fixedResponse(request *mDNS.Msg, rcode int) *mDNS.Msg {
 
 func testGroup(primary []*primaryState, fallback adapter.DNSTransport, fallbackEnabled bool) *Transport {
 	return &Transport{
-		TransportAdapter:  boxdns.NewTransportAdapter(C.DNSTypeRouteFluentResolverGroup, "rf-group", nil),
+		TransportAdapter:  boxdns.NewTransportAdapter(C.DNSTypeRFResolverGroup, "rf-group", nil),
 		logger:            log.NewNOPFactory().Logger(),
 		primaries:         primary,
 		fallback:          fallback,
@@ -278,7 +278,7 @@ func TestStartRejectsNonDoHPrimaryAndNonLocalFallback(t *testing.T) {
 	ctx := service.ContextWithDefaultRegistry(context.Background())
 	service.MustRegister[adapter.DNSTransportManager](ctx, manager)
 
-	transport, err := NewTransport(ctx, log.NewNOPFactory().Logger(), "rf", option.RouteFluentResolverGroupDNSServerOptions{
+	transport, err := NewTransport(ctx, log.NewNOPFactory().Logger(), "rf", option.RFResolverGroupDNSServerOptions{
 		Primary:         []string{"udp"},
 		Fallback:        "https",
 		FallbackEnabled: true,

@@ -1,11 +1,11 @@
-# RouteFluent sing-box
+# RF sing-box
 
-RouteFluent 的受控制品构建仓库。它以固定的上游 sing-box 版本为基线，只维护 RouteFluent 尚未被上游覆盖的窄范围 DNS 能力；AnyTLS 客户端元数据使用上游正式字段 `client_metadata`，不再维护私有 `client` 字段。
+RF 的受控制品构建仓库。它以固定的上游 sing-box 版本为基线，只维护 RF 尚未被上游覆盖的窄范围 DNS 能力；AnyTLS 客户端元数据使用上游正式字段 `client_metadata`，不再维护私有 `client` 字段。
 
 该仓库会：
 
 1. 克隆并核对精确的上游 sing-box tag 与 commit；
-2. 应用 RouteFluent DNS resolver group、LineAsset 入口 binding transport 与严格 `check` 生命周期补丁；
+2. 应用 RF DNS resolver group、LineAsset 入口 binding transport 与严格 `check` 生命周期补丁；
 3. 构建静态 Linux amd64 二进制；
 4. 输出可机读、带哈希的构建 manifest；
 5. 通过 GitHub Actions 校验并发布不可变制品。
@@ -16,8 +16,8 @@ RouteFluent 的受控制品构建仓库。它以固定的上游 sing-box 版本�
 | --- | --- |
 | sing-box | `v1.14.2` / `af6e64c3b69e6132ebaee0e1a3d24e93903f6709` |
 | sing-anytls（上游依赖） | `v0.0.11` / `130d2e61b8895727bfed4942c535e91b246a9603` |
-| RouteFluent patch id | `routefluent-dns-query-recipe-check-v5` |
-| 版本名 | `1.14.2-routefluent-dns.4` |
+| RF patch id | `rf-dns-query-recipe-check-v1` |
+| 版本名 | `1.14.2-rf-dns.1` |
 | 默认 build tags | `with_utls with_clash_api` |
 | 目标 | `linux/amd64`, `CGO_ENABLED=0` |
 
@@ -25,7 +25,7 @@ RouteFluent 的受控制品构建仓库。它以固定的上游 sing-box 版本�
 
 ### 上游 AnyTLS `client_metadata`
 
-sing-box 1.13.16 起原生支持 AnyTLS `client_metadata`。RouteFluent 编译器只生成这个上游字段：
+sing-box 1.13.16 起原生支持 AnyTLS `client_metadata`。RF 编译器只生成这个上游字段：
 
 ```json
 {
@@ -38,16 +38,16 @@ sing-box 1.13.16 起原生支持 AnyTLS `client_metadata`。RouteFluent 编译�
 }
 ```
 
-旧私有字段 `client` 必须被 `sing-box check -c` 拒绝。设备是否具备该能力以受控二进制的版本证据判定，不再上报 RouteFluent 私有 AnyTLS capability。
+旧私有字段 `client` 必须被 `sing-box check -c` 拒绝。设备是否具备该能力以受控二进制的版本证据判定，不再上报 RF 私有 AnyTLS capability。
 
-### RouteFluent resolver group
+### RF resolver group
 
-补丁增加 `routefluent_resolver_group` DNS server：
+补丁增加 `rf_resolver_group` DNS server：
 
 ```json
 {
   "tag": "rf-resolver-vendor-a",
-  "type": "routefluent_resolver_group",
+  "type": "rf_resolver_group",
   "primary": ["vendor-a-doh"],
   "fallback": "local-system",
   "fallback_enabled": true,
@@ -67,23 +67,23 @@ sing-box 1.13.16 起原生支持 AnyTLS `client_metadata`。RouteFluent 编译�
 
 本机 DNS fallback 只是同一 provider resolver group 内的显式可用性策略，不是线路切换、订阅兼容或业务流量 direct 放行。
 
-### RouteFluent LineAsset 入口 binding
+### RF LineAsset 入口 binding
 
-`routefluent_ingress_binding` 是每个已部署 LineAsset 独立的 DNS-shaped transport。它读取 Agent 原子提交的单一 binding current：`resolver` 按可选 `query_name`（缺省为 logical domain）委托给资产既定 resolver，并把答案归还给原 logical domain；`explicit_ipv4` 只为该资产的 logical domain 返回当前一个 IPv4。没有 Provider 关联但存在别名配方时，transport 只执行静态 query-name 改写，不要求虚构 binding current。`binding_revision` 与 query name 进入 DNS cache environment；地址簿和历史候选不会进入 sing-box 配置，也不会形成 try-next。
+`rf_ingress_binding` 是每个已部署 LineAsset 独立的 DNS-shaped transport。它读取 Agent 原子提交的单一 binding current：`resolver` 按可选 `query_name`（缺省为 logical domain）委托给资产既定 resolver，并把答案归还给原 logical domain；`explicit_ipv4` 只为该资产的 logical domain 返回当前一个 IPv4。没有 Provider 关联但存在别名配方时，transport 只执行静态 query-name 改写，不要求虚构 binding current。`binding_revision` 与 query name 进入 DNS cache environment；地址簿和历史候选不会进入 sing-box 配置，也不会形成 try-next。
 
 ## 本地构建与验证
 
 依赖 Git、Go 1.24 和 Python 3.9+：
 
 ```bash
-python build_routefluent_sing_box.py
+python build_rf_sing_box.py
 ```
 
 输出：
 
 ```text
 dist/sing-box-linux-amd64
-dist/sing-box-linux-amd64.routefluent-dns.json
+dist/sing-box-linux-amd64.rf-dns.json
 ```
 
 验证：
@@ -92,19 +92,19 @@ dist/sing-box-linux-amd64.routefluent-dns.json
 ./dist/sing-box-linux-amd64 version
 ./dist/sing-box-linux-amd64 check -c testdata/anytls-client-metadata-check.json
 ! ./dist/sing-box-linux-amd64 check -c testdata/anytls-legacy-client-rejected.json
-./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-resolver-group-check.json
-./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-doh-bootstrap-check.json
-./dist/sing-box-linux-amd64 check -c testdata/routefluent-ingress-binding-check.json
-! ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-invalid-primary-local.json
-! ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-invalid-fallback-https.json
-! ./dist/sing-box-linux-amd64 check -c testdata/routefluent-dns-invalid-fallback-missing-probes.json
-python3 scripts/routefluent_dns_runtime_smoke.py --sing-box ./dist/sing-box-linux-amd64
+./dist/sing-box-linux-amd64 check -c testdata/rf-dns-resolver-group-check.json
+./dist/sing-box-linux-amd64 check -c testdata/rf-dns-doh-bootstrap-check.json
+./dist/sing-box-linux-amd64 check -c testdata/rf-ingress-binding-check.json
+! ./dist/sing-box-linux-amd64 check -c testdata/rf-dns-invalid-primary-local.json
+! ./dist/sing-box-linux-amd64 check -c testdata/rf-dns-invalid-fallback-https.json
+! ./dist/sing-box-linux-amd64 check -c testdata/rf-dns-invalid-fallback-missing-probes.json
+python3 scripts/rf_dns_runtime_smoke.py --sing-box ./dist/sing-box-linux-amd64
 ```
 
 版本输出必须包含：
 
 ```text
-1.14.2-routefluent-dns.4
+1.14.2-rf-dns.1
 ```
 
 ## GitHub Release
@@ -114,14 +114,14 @@ python3 scripts/routefluent_dns_runtime_smoke.py --sing-box ./dist/sing-box-linu
 当前 tag：
 
 ```bash
-git tag v1.14.2-routefluent-dns.4
-git push origin v1.14.2-routefluent-dns.4
+git tag v1.14.2-rf-dns.1
+git push origin v1.14.2-rf-dns.1
 ```
 
 发布资产：
 
 - `sing-box-linux-amd64`
-- `sing-box-linux-amd64.routefluent-dns.json`
+- `sing-box-linux-amd64.rf-dns.json`
 - `SHA256SUMS`
 
 ## 下游使用
@@ -129,38 +129,38 @@ git push origin v1.14.2-routefluent-dns.4
 发布制品模式：
 
 ```bash
-VERSION=v1.14.2-routefluent-dns.4
+VERSION=v1.14.2-rf-dns.1
 BASE=https://github.com/DavidYordan/routefluent-sing-box/releases/download/$VERSION
 
 curl -L -o sing-box-linux-amd64 "$BASE/sing-box-linux-amd64"
-curl -L -o sing-box-linux-amd64.routefluent-dns.json "$BASE/sing-box-linux-amd64.routefluent-dns.json"
+curl -L -o sing-box-linux-amd64.rf-dns.json "$BASE/sing-box-linux-amd64.rf-dns.json"
 curl -L -o SHA256SUMS "$BASE/SHA256SUMS"
 sha256sum -c SHA256SUMS
 chmod +x sing-box-linux-amd64
 ./sing-box-linux-amd64 version
 ```
 
-RouteFluent 主仓库通过 `third_party/sing-box` 子模块固定此仓库 commit，并校验 release URL、manifest、二进制大小和 SHA256。主路径只接受以下明确能力：
+RF 主仓库通过 `third_party/sing-box` 子模块固定此仓库 commit，并校验 release URL、manifest、二进制大小和 SHA256。主路径只接受以下明确能力：
 
 - `upstream_anytls_client_metadata`
-- `routefluent_dns_resolver_group`
-- `routefluent_ingress_binding`
-- `routefluent_dns_check_start_validation`
+- `rf_dns_resolver_group`
+- `rf_ingress_binding`
+- `rf_dns_check_start_validation`
 
 从子模块直接构建：
 
 ```bash
-python third_party/sing-box/build_routefluent_sing_box.py \
+python third_party/sing-box/build_rf_sing_box.py \
   --output dist/sing-box-linux-amd64 \
-  --manifest dist/sing-box-linux-amd64.routefluent-dns.json
+  --manifest dist/sing-box-linux-amd64.rf-dns.json
 ```
 
 ## 兼容边界
 
-该制品不是订阅解析兼容层，不提供自动换线路、跨 provider fallback 或数据面 direct。RouteFluent 编译器和 Deploy 路径仍会在字段、版本、manifest 或运行证据不一致时失败关闭。
+该制品不是订阅解析兼容层，不提供自动换线路、跨 provider fallback 或数据面 direct。RF 编译器和 Deploy 路径仍会在字段、版本、manifest 或运行证据不一致时失败关闭。
 
-生成二进制所包含的上游 sing-box 与 sing-anytls 继续适用各自许可证；本仓库负责可复现构建和 RouteFluent 窄补丁。
+生成二进制所包含的上游 sing-box 与 sing-anytls 继续适用各自许可证；本仓库负责可复现构建和 RF 窄补丁。
 
 ## 源码缓存
 
-构建脚本把上游 checkout 保存在指定 workdir 的 `src` 目录。缓存恰好位于固定 commit 时，脚本会先将这个专用派生目录清理回该 commit，再重新应用 RouteFluent 补丁；commit 不一致或目录不是 Git checkout 时才删除并重新克隆。缓存 checkout 强制使用 LF，避免 Windows 全局 Git 配置改变制品哈希。缓存不会改变版本核验、补丁锚点校验或制品哈希要求。
+构建脚本把上游 checkout 保存在指定 workdir 的 `src` 目录。缓存恰好位于固定 commit 时，脚本会先将这个专用派生目录清理回该 commit，再重新应用 RF 补丁；commit 不一致或目录不是 Git checkout 时才删除并重新克隆。缓存 checkout 强制使用 LF，避免 Windows 全局 Git 配置改变制品哈希。缓存不会改变版本核验、补丁锚点校验或制品哈希要求。

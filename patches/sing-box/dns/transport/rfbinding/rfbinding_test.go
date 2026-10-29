@@ -1,4 +1,4 @@
-package routefluentbinding
+package rfbinding
 
 import (
 	"bytes"
@@ -18,7 +18,7 @@ func TestExplicitBindingReturnsOneCurrentIPv4AndRevisionEnvironment(t *testing.T
 	path := filepath.Join(t.TempDir(), "line-7.json")
 	writeBinding(t, path, "explicit_ipv4", `"1.1.1.1"`, 4)
 	transport := &Transport{
-		TransportAdapter: dns.NewTransportAdapter("routefluent_ingress_binding", "ingress-binding-7", nil),
+		TransportAdapter: dns.NewTransportAdapter("rf_ingress_binding", "ingress-binding-7", nil),
 		bindingFile:      path, logicalDomain: "edge.example.com", queryName: "edge.example.com",
 	}
 	request := new(mDNS.Msg)
@@ -44,7 +44,7 @@ func TestExplicitBindingKeepsOtherDomainOutOfPrivateAnswer(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "line-7.json")
 	writeBinding(t, path, "explicit_ipv4", `"1.1.1.1"`, 1)
 	transport := &Transport{
-		TransportAdapter: dns.NewTransportAdapter("routefluent_ingress_binding", "ingress-binding-7", nil),
+		TransportAdapter: dns.NewTransportAdapter("rf_ingress_binding", "ingress-binding-7", nil),
 		bindingFile:      path, logicalDomain: "edge.example.com", queryName: "edge.example.com",
 	}
 	request := new(mDNS.Msg)
@@ -66,7 +66,7 @@ func TestRetiredBindingSchemaIsRejected(t *testing.T) {
 		t.Fatal(err)
 	}
 	transport := &Transport{
-		TransportAdapter: dns.NewTransportAdapter("routefluent_ingress_binding", "ingress-binding-7", nil),
+		TransportAdapter: dns.NewTransportAdapter("rf_ingress_binding", "ingress-binding-7", nil),
 		bindingFile:      path, logicalDomain: "edge.example.com", queryName: "edge.example.com",
 	}
 	request := new(mDNS.Msg)
@@ -103,7 +103,7 @@ func (r *recordingResolver) ExchangeAsync(ctx context.Context, request *mDNS.Msg
 func TestResolverBindingQueriesAliasAndReturnsAnswerForLogicalDomain(t *testing.T) {
 	resolver := &recordingResolver{TransportAdapter: dns.NewTransportAdapter("local", "resolver", nil)}
 	transport := &Transport{
-		TransportAdapter: dns.NewTransportAdapter("routefluent_ingress_binding", "ingress-binding-7", nil),
+		TransportAdapter: dns.NewTransportAdapter("rf_ingress_binding", "ingress-binding-7", nil),
 		logicalDomain:    "edge.example.com", queryName: "entry.example.net", resolver: resolver,
 	}
 	request := new(mDNS.Msg)

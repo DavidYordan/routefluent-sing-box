@@ -1,4 +1,4 @@
-package routefluentbinding
+package rfbinding
 
 import (
 	"bytes"
@@ -36,7 +36,7 @@ var _ adapter.DNSTransport = (*Transport)(nil)
 var _ adapter.DNSTransportWithEnvironment = (*Transport)(nil)
 
 func RegisterTransport(registry *boxdns.TransportRegistry) {
-	boxdns.RegisterTransport[option.RouteFluentIngressBindingDNSServerOptions](registry, C.DNSTypeRouteFluentIngressBinding, NewTransport)
+	boxdns.RegisterTransport[option.RFIngressBindingDNSServerOptions](registry, C.DNSTypeRFIngressBinding, NewTransport)
 }
 
 type bindingCurrent struct {
@@ -67,35 +67,35 @@ type Transport struct {
 	resolver adapter.DNSTransport
 }
 
-func NewTransport(ctx context.Context, _ log.ContextLogger, tag string, options option.RouteFluentIngressBindingDNSServerOptions) (adapter.DNSTransport, error) {
+func NewTransport(ctx context.Context, _ log.ContextLogger, tag string, options option.RFIngressBindingDNSServerOptions) (adapter.DNSTransport, error) {
 	if tag == "" {
-		return nil, E.New("routefluent ingress binding tag is required")
+		return nil, E.New("rf ingress binding tag is required")
 	}
 	bindingFile := strings.TrimSpace(options.BindingFile)
 	if bindingFile != "" && (!filepath.IsAbs(bindingFile) || filepath.Clean(bindingFile) != bindingFile) {
-		return nil, E.New("routefluent ingress binding_file must be an absolute clean path")
+		return nil, E.New("rf ingress binding_file must be an absolute clean path")
 	}
 	domain := strings.TrimSpace(options.LogicalDomain)
 	if !canonicalDomain(domain) {
-		return nil, E.New("routefluent ingress logical_domain is invalid")
+		return nil, E.New("rf ingress logical_domain is invalid")
 	}
 	queryName := strings.TrimSpace(options.QueryName)
 	if queryName == "" {
 		queryName = domain
 	}
 	if !canonicalDomain(queryName) {
-		return nil, E.New("routefluent ingress query_name is invalid")
+		return nil, E.New("rf ingress query_name is invalid")
 	}
 	resolverTag := strings.TrimSpace(options.Resolver)
 	if resolverTag == "" || resolverTag == tag {
-		return nil, E.New("routefluent ingress binding requires another resolver transport")
+		return nil, E.New("rf ingress binding requires another resolver transport")
 	}
 	manager := service.FromContext[adapter.DNSTransportManager](ctx)
 	if manager == nil {
 		return nil, E.New("missing DNS transport manager in context")
 	}
 	return &Transport{
-		TransportAdapter: boxdns.NewTransportAdapter(C.DNSTypeRouteFluentIngressBinding, tag, []string{resolverTag}),
+		TransportAdapter: boxdns.NewTransportAdapter(C.DNSTypeRFIngressBinding, tag, []string{resolverTag}),
 		manager:          manager, bindingFile: bindingFile, logicalDomain: domain, queryName: queryName, resolverTag: resolverTag,
 	}, nil
 }
@@ -106,7 +106,7 @@ func (t *Transport) Start(stage adapter.StartStage) error {
 	}
 	resolver, loaded := t.manager.Transport(t.resolverTag)
 	if !loaded {
-		return E.New("routefluent ingress binding resolver not found: ", t.resolverTag)
+		return E.New("rf ingress binding resolver not found: ", t.resolverTag)
 	}
 	t.access.Lock()
 	t.resolver = resolver
@@ -148,7 +148,7 @@ func (t *Transport) Environment() []string {
 
 func (t *Transport) Exchange(ctx context.Context, message *mDNS.Msg) (*mDNS.Msg, error) {
 	if message == nil || len(message.Question) != 1 {
-		return nil, E.New("routefluent ingress binding requires one DNS question")
+		return nil, E.New("rf ingress binding requires one DNS question")
 	}
 	var binding bindingCurrent
 	if t.bindingFile != "" {
@@ -160,7 +160,7 @@ func (t *Transport) Exchange(ctx context.Context, message *mDNS.Msg) (*mDNS.Msg,
 	}
 	question := message.Question[0]
 	if strings.TrimSuffix(strings.ToLower(question.Name), ".") != t.logicalDomain {
-		return nil, E.New("routefluent ingress binding received an unrelated domain")
+		return nil, E.New("rf ingress binding received an unrelated domain")
 	}
 	if t.bindingFile == "" || binding.Mode == modeResolver {
 		return t.exchangeResolver(ctx, message)
@@ -190,7 +190,7 @@ func (t *Transport) exchangeResolver(ctx context.Context, message *mDNS.Msg) (*m
 	resolver := t.resolver
 	t.access.RUnlock()
 	if resolver == nil {
-		return nil, E.New("routefluent ingress binding resolver is not initialized")
+		return nil, E.New("rf ingress binding resolver is not initialized")
 	}
 	request := message.Copy()
 	request.Question[0].Name = mDNS.Fqdn(t.queryName)
@@ -214,26 +214,26 @@ func (t *Transport) exchangeResolver(ctx context.Context, message *mDNS.Msg) (*m
 func (t *Transport) loadBinding() (bindingCurrent, error) {
 	info, err := os.Lstat(t.bindingFile)
 	if err != nil {
-		return bindingCurrent{}, E.Cause(err, "read routefluent ingress binding")
+		return bindingCurrent{}, E.Cause(err, "read rf ingress binding")
 	}
 	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Size() <= 0 || info.Size() > maximumBytes {
-		return bindingCurrent{}, E.New("routefluent ingress binding file is invalid")
+		return bindingCurrent{}, E.New("rf ingress binding file is invalid")
 	}
 	raw, err := os.ReadFile(t.bindingFile)
 	if err != nil {
-		return bindingCurrent{}, E.Cause(err, "read routefluent ingress binding")
+		return bindingCurrent{}, E.Cause(err, "read rf ingress binding")
 	}
 	var binding bindingCurrent
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&binding); err != nil {
-		return bindingCurrent{}, E.Cause(err, "decode routefluent ingress binding")
+		return bindingCurrent{}, E.Cause(err, "decode rf ingress binding")
 	}
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		return bindingCurrent{}, E.New("routefluent ingress binding contains trailing JSON")
+		return bindingCurrent{}, E.New("rf ingress binding contains trailing JSON")
 	}
 	if binding.Schema != bindingSchema || binding.TenantID == 0 || binding.DeviceID == 0 || binding.LineAssetID == 0 || binding.EndpointFamilyID == 0 || binding.BindingRevision == 0 || binding.LogicalDomain != t.logicalDomain {
-		return bindingCurrent{}, E.New("routefluent ingress binding identity is invalid")
+		return bindingCurrent{}, E.New("rf ingress binding identity is invalid")
 	}
 	switch binding.Mode {
 	case modeResolver:
@@ -249,7 +249,7 @@ func (t *Transport) loadBinding() (bindingCurrent, error) {
 			return bindingCurrent{}, E.New("explicit ingress binding connect_ipv4 is invalid")
 		}
 	default:
-		return bindingCurrent{}, E.New("routefluent ingress binding mode is invalid")
+		return bindingCurrent{}, E.New("rf ingress binding mode is invalid")
 	}
 	return binding, nil
 }

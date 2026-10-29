@@ -20,7 +20,7 @@
       },
       {
         "tag": "rf-invalid-fallback",
-        "type": "routefluent_resolver_group",
+        "type": "rf_resolver_group",
         "primary": [
           "primary-doh"
         ],

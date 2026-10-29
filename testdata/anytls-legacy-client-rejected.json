@@ -9,11 +9,11 @@
       "tag": "anytls-legacy-client-must-fail",
       "server": "127.0.0.1",
       "server_port": 443,
-      "password": "routefluent-check",
+      "password": "rf-check",
       "client": "mihomo/1.19.28",
       "tls": {
         "enabled": true,
-        "server_name": "routefluent.invalid",
+        "server_name": "rf.invalid",
         "insecure": true
       }
     },

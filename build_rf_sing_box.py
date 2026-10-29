@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Build RouteFluent's controlled sing-box binary.
+"""Build RF's controlled sing-box binary.
 
 Upstream sing-box 1.13.16 and later owns AnyTLS ``client_metadata``.  The
-RouteFluent patch is therefore limited to the provider-scoped DNS resolver
+RF patch is therefore limited to the provider-scoped DNS resolver
 group, the Device/LineAsset ingress-binding transport, and strict
 ``sing-box check`` pre-start validation.
 """
@@ -28,12 +28,12 @@ SING_ANYTLS_VERSION = "v0.0.11"
 SING_BOX_COMMIT = "af6e64c3b69e6132ebaee0e1a3d24e93903f6709"
 SING_ANYTLS_COMMIT = "130d2e61b8895727bfed4942c535e91b246a9603"
 REPO_ROOT = Path(__file__).resolve().parent
-PATCH_ID = "routefluent-dns-query-recipe-check-v5"
+PATCH_ID = "rf-dns-query-recipe-check-v1"
 FEATURE_UPSTREAM_ANYTLS_CLIENT_METADATA = "upstream_anytls_client_metadata"
-FEATURE_ROUTEFLUENT_DNS_RESOLVER_GROUP = "routefluent_dns_resolver_group"
-FEATURE_ROUTEFLUENT_INGRESS_BINDING = "routefluent_ingress_binding"
-FEATURE_ROUTEFLUENT_DNS_CHECK_START_VALIDATION = "routefluent_dns_check_start_validation"
-PATCHED_SING_BOX_VERSION = "1.14.2-routefluent-dns.4"
+FEATURE_RF_DNS_RESOLVER_GROUP = "rf_dns_resolver_group"
+FEATURE_RF_INGRESS_BINDING = "rf_ingress_binding"
+FEATURE_RF_DNS_CHECK_START_VALIDATION = "rf_dns_check_start_validation"
+PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.1"
 DEFAULT_TAGS = "with_utls with_clash_api"
 
 
@@ -177,14 +177,14 @@ def patch_sing_box(source_dir: Path) -> None:
         source_dir / "constant" / "dns.go",
         '\tDNSTypeTailscale   = "tailscale"\n',
         '\tDNSTypeTailscale                 = "tailscale"\n'
-        '\tDNSTypeRouteFluentResolverGroup  = "routefluent_resolver_group"\n'
-        '\tDNSTypeRouteFluentIngressBinding = "routefluent_ingress_binding"\n',
+        '\tDNSTypeRFResolverGroup  = "rf_resolver_group"\n'
+        '\tDNSTypeRFIngressBinding = "rf_ingress_binding"\n',
     )
     replace_once(
         source_dir / "option" / "dns.go",
         "type DHCPDNSServerOptions struct {\n\tLocalDNSServerOptions\n\tInterface string `json:\"interface,omitempty\"`\n}\n",
         "type DHCPDNSServerOptions struct {\n\tLocalDNSServerOptions\n\tInterface string `json:\"interface,omitempty\"`\n}\n\n"
-        "type RouteFluentResolverGroupDNSServerOptions struct {\n"
+        "type RFResolverGroupDNSServerOptions struct {\n"
         "\tPrimary                  []string           `json:\"primary,omitempty\"`\n"
         "\tFallback                 string             `json:\"fallback,omitempty\"`\n"
         "\tFallbackEnabled          bool               `json:\"fallback_enabled,omitempty\"`\n"
@@ -196,7 +196,7 @@ def patch_sing_box(source_dir: Path) -> None:
         "\tUnhealthyCooldown        badoption.Duration `json:\"unhealthy_cooldown,omitempty\"`\n"
         "\tFallbackTTLCap           badoption.Duration `json:\"fallback_ttl_cap,omitempty\"`\n"
         "}\n\n"
-        "type RouteFluentIngressBindingDNSServerOptions struct {\n"
+        "type RFIngressBindingDNSServerOptions struct {\n"
         "\tBindingFile   string `json:\"binding_file\"`\n"
         "\tLogicalDomain string `json:\"logical_domain\"`\n"
         "\tQueryName     string `json:\"query_name,omitempty\"`\n"
@@ -207,20 +207,20 @@ def patch_sing_box(source_dir: Path) -> None:
         source_dir / "include" / "registry.go",
         '\t"github.com/sagernet/sing-box/dns/transport/local"\n',
         '\t"github.com/sagernet/sing-box/dns/transport/local"\n'
-        '\t"github.com/sagernet/sing-box/dns/transport/routefluentbinding"\n'
-        '\t"github.com/sagernet/sing-box/dns/transport/routefluentgroup"\n',
+        '\t"github.com/sagernet/sing-box/dns/transport/rfbinding"\n'
+        '\t"github.com/sagernet/sing-box/dns/transport/rfgroup"\n',
     )
     replace_once(
         source_dir / "include" / "registry.go",
         "\tlocal.RegisterTransport(registry)\n",
         "\tlocal.RegisterTransport(registry)\n"
-        "\troutefluentbinding.RegisterTransport(registry)\n"
-        "\troutefluentgroup.RegisterTransport(registry)\n",
+        "\trfbinding.RegisterTransport(registry)\n"
+        "\trfgroup.RegisterTransport(registry)\n",
     )
-    copy_patch_file(source_dir, "dns/transport/routefluentgroup/routefluentgroup.go")
-    copy_patch_file(source_dir, "dns/transport/routefluentgroup/routefluentgroup_test.go")
-    copy_patch_file(source_dir, "dns/transport/routefluentbinding/routefluentbinding.go")
-    copy_patch_file(source_dir, "dns/transport/routefluentbinding/routefluentbinding_test.go")
+    copy_patch_file(source_dir, "dns/transport/rfgroup/rfgroup.go")
+    copy_patch_file(source_dir, "dns/transport/rfgroup/rfgroup_test.go")
+    copy_patch_file(source_dir, "dns/transport/rfbinding/rfbinding.go")
+    copy_patch_file(source_dir, "dns/transport/rfbinding/rfbinding_test.go")
 
 
 def verify_sing_anytls_dependency(sing_box_dir: Path, sing_anytls_dir: Path) -> None:
@@ -252,10 +252,10 @@ def build(args: argparse.Namespace) -> None:
     gofmt_files([
         sing_box_dir / "cmd" / "sing-box" / "cmd_check.go",
         sing_box_dir / "constant" / "dns.go",
-        sing_box_dir / "dns" / "transport" / "routefluentbinding" / "routefluentbinding.go",
-        sing_box_dir / "dns" / "transport" / "routefluentbinding" / "routefluentbinding_test.go",
-        sing_box_dir / "dns" / "transport" / "routefluentgroup" / "routefluentgroup.go",
-        sing_box_dir / "dns" / "transport" / "routefluentgroup" / "routefluentgroup_test.go",
+        sing_box_dir / "dns" / "transport" / "rfbinding" / "rfbinding.go",
+        sing_box_dir / "dns" / "transport" / "rfbinding" / "rfbinding_test.go",
+        sing_box_dir / "dns" / "transport" / "rfgroup" / "rfgroup.go",
+        sing_box_dir / "dns" / "transport" / "rfgroup" / "rfgroup_test.go",
         sing_box_dir / "include" / "registry.go",
         sing_box_dir / "option" / "dns.go",
     ])
@@ -284,9 +284,9 @@ def build(args: argparse.Namespace) -> None:
         "patch_id": PATCH_ID,
         "features": [
             FEATURE_UPSTREAM_ANYTLS_CLIENT_METADATA,
-            FEATURE_ROUTEFLUENT_DNS_RESOLVER_GROUP,
-            FEATURE_ROUTEFLUENT_INGRESS_BINDING,
-            FEATURE_ROUTEFLUENT_DNS_CHECK_START_VALIDATION,
+            FEATURE_RF_DNS_RESOLVER_GROUP,
+            FEATURE_RF_INGRESS_BINDING,
+            FEATURE_RF_DNS_CHECK_START_VALIDATION,
         ],
         "sing_box_version": SING_BOX_VERSION,
         "sing_box_commit": SING_BOX_COMMIT,
@@ -313,16 +313,16 @@ def build(args: argparse.Namespace) -> None:
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Build RouteFluent sing-box with the controlled DNS resolver patch.")
+    parser = argparse.ArgumentParser(description="Build RF sing-box with the controlled DNS resolver patch.")
     default_workdir = Path(__file__).resolve().parent / "work"
     default_output = Path(__file__).resolve().parent / "dist" / "sing-box-linux-amd64"
-    default_manifest = Path(__file__).resolve().parent / "dist" / "sing-box-linux-amd64.routefluent-dns.json"
+    default_manifest = Path(__file__).resolve().parent / "dist" / "sing-box-linux-amd64.rf-dns.json"
     parser.add_argument("--workdir", default=str(default_workdir))
     parser.add_argument("--output", default=str(default_output))
     parser.add_argument("--manifest", default=str(default_manifest))
     parser.add_argument("--goos", default="linux")
     parser.add_argument("--goarch", default="amd64")
-    parser.add_argument("--tags", default=os.environ.get("ROUTEFLUENT_SING_BOX_TAGS", DEFAULT_TAGS))
+    parser.add_argument("--tags", default=os.environ.get("RF_SING_BOX_TAGS", DEFAULT_TAGS))
     return parser.parse_args(argv)
 
 

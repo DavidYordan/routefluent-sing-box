@@ -10,7 +10,7 @@
       },
       {
         "tag": "rf-invalid-primary",
-        "type": "routefluent_resolver_group",
+        "type": "rf_resolver_group",
         "primary": [
           "local-system"
         ]

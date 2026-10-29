@@ -4,16 +4,16 @@
     "servers": [
       { "type": "local", "tag": "local-system" },
       {
-        "type": "routefluent_resolver_group",
+        "type": "rf_resolver_group",
         "tag": "asset-resolver",
         "mode": "local_only",
         "fallback": "local-system",
         "fallback_enabled": true
       },
       {
-        "type": "routefluent_ingress_binding",
+        "type": "rf_ingress_binding",
         "tag": "ingress-binding-7",
-        "binding_file": "/var/lib/routefluent/state/provider-ingress/bindings/line-7.json",
+        "binding_file": "/var/lib/rf/state/provider-ingress/bindings/line-7.json",
         "logical_domain": "edge.example.com",
         "query_name": "entry.example.net",
         "resolver": "asset-resolver"

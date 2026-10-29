@@ -17,7 +17,7 @@
       },
       {
         "tag": "rf-resolver-cloudflare",
-        "type": "routefluent_resolver_group",
+        "type": "rf_resolver_group",
         "primary": [
           "cloudflare-doh"
         ],
@@ -35,7 +35,7 @@
       },
       {
         "tag": "rf-resolver-local-only",
-        "type": "routefluent_resolver_group",
+        "type": "rf_resolver_group",
         "fallback": "local-system",
         "fallback_enabled": true,
         "mode": "local_only",

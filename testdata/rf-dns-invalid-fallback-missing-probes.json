@@ -17,7 +17,7 @@
       },
       {
         "tag": "rf-missing-probes",
-        "type": "routefluent_resolver_group",
+        "type": "rf_resolver_group",
         "primary": [
           "primary-doh"
         ],

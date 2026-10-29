@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runtime smoke for RouteFluent DNS resolver groups.
+"""Runtime smoke for RF DNS resolver groups.
 
 The test is intentionally local-only and deterministic. It starts:
 
@@ -94,7 +94,7 @@ class TargetHandler(http.server.BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("content-type", "text/plain")
         self.end_headers()
-        self.wfile.write(b"routefluent-smoke-ok\n")
+        self.wfile.write(b"rf-smoke-ok\n")
 
     def log_message(self, _format: str, *_args: object) -> None:
         return
@@ -205,7 +205,7 @@ def serve_http(
             temp_dir.cleanup()
 
 
-def routefluent_config(
+def rf_config(
     *,
     doh_port: int,
     fallback_enabled: bool,
@@ -231,7 +231,7 @@ def routefluent_config(
     ]
     group: dict[str, object] = {
         "tag": "rf-runtime",
-        "type": "routefluent_resolver_group",
+        "type": "rf_resolver_group",
         "primary": ["mock-doh"],
     }
     if fallback:
@@ -249,7 +249,7 @@ def routefluent_config(
     if query_name:
         servers.append({
             "tag": "ingress-binding-7",
-            "type": "routefluent_ingress_binding",
+            "type": "rf_ingress_binding",
             "logical_domain": "rf-logical.test",
             "query_name": query_name,
             "resolver": "rf-runtime",
@@ -321,7 +321,7 @@ def choose_local_resolvable_host(port: int) -> str:
 
 
 def require_success(label: str, result: subprocess.CompletedProcess[str]) -> None:
-    if result.returncode != 0 or "routefluent-smoke-ok" not in result.stdout:
+    if result.returncode != 0 or "rf-smoke-ok" not in result.stdout:
         raise RuntimeError(f"{label} failed unexpectedly with exit {result.returncode}:\n{result.stdout}")
     print(f"[OK] {label}")
 
@@ -335,7 +335,7 @@ def require_failure(label: str, result: subprocess.CompletedProcess[str], expect
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run local runtime smoke checks for RouteFluent DNS resolver group.")
+    parser = argparse.ArgumentParser(description="Run local runtime smoke checks for RF DNS resolver group.")
     parser.add_argument("--sing-box", default="dist/sing-box-linux-amd64", help="Path to the built sing-box binary.")
     args = parser.parse_args()
 
@@ -351,7 +351,7 @@ def main() -> int:
             primary_config = temp_dir / "primary.json"
             write_config(
                 primary_config,
-                routefluent_config(
+                rf_config(
                     doh_port=doh_port,
                     fallback_enabled=False,
                     fallback=False,
@@ -367,7 +367,7 @@ def main() -> int:
             alias_config = temp_dir / "query-name.json"
             write_config(
                 alias_config,
-                routefluent_config(
+                rf_config(
                     doh_port=doh_port,
                     fallback_enabled=False,
                     fallback=False,
@@ -385,7 +385,7 @@ def main() -> int:
             strict_config = temp_dir / "strict.json"
             write_config(
                 strict_config,
-                routefluent_config(
+                rf_config(
                     doh_port=9,
                     fallback_enabled=False,
                     fallback=False,
@@ -404,7 +404,7 @@ def main() -> int:
                 fallback_config = temp_dir / "fallback.json"
                 write_config(
                     fallback_config,
-                    routefluent_config(
+                    rf_config(
                         doh_port=9,
                         fallback_enabled=True,
                         fallback=True,
