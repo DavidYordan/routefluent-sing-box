@@ -1,11 +1,11 @@
 # DoH 优先与本机 DNS 兜底解析设计
 
 日期：2026-07-11
-状态：已实现并重基于 sing-box `v1.14.2`，发布版本 `v1.14.2-routefluent-dns.1`
+状态：已实现并重基于 sing-box `v1.14.2`，发布版本 `v1.14.2-rf-dns.3`
 
 ## 背景
 
-RouteFluent 生成的 sing-box 配置中，代理 outbound 的 `server` 可能是域名。此前的严格做法倾向于由 RouteFluent 在服务端预解析为 IP 后下发，但这会带来两个问题：
+网关管理生成的 sing-box 配置中，代理 outbound 的 `server` 可能是域名。此前的严格做法倾向于由 Server 预解析为 IP 后下发，但这会带来两个问题：
 
 1. 一些订阅或线路商家会提供更适合该线路的 DoH 解析入口，终端应优先使用它来解析该商家的代理域名。
 2. 终端环境可能临时无法访问 DoH。如果完全禁止本机 DNS，可能导致本来可用的线路无法建立连接。
@@ -36,7 +36,7 @@ RouteFluent 生成的 sing-box 配置中，代理 outbound 的 `server` 可能�
 2. 不改变 route、outbound、selector 或 urltest 的选择逻辑。
 3. 不处理 LAN 终端业务 DNS 的准入策略。
 4. 不实现 fake-ip、透明代理 DNS 劫持或订阅解析兼容层。
-5. 不把 RouteFluent 服务端预解析能力删除。服务端预解析仍作为配置生成策略之一，用于不适合终端解析或需要强审计的场景。
+5. 不删除 Server 预解析能力。服务端预解析仍作为配置生成策略之一，用于不适合终端解析或需要强审计的场景。
 
 ## 现有 sing-box 能力与缺口
 
@@ -57,7 +57,7 @@ sing-box `v1.14.2` 已有基础构件：
 
 ## 建议配置模型
 
-新增 DNS server 类型：`routefluent_resolver_group`。
+新增 DNS server 类型：`rf_resolver_group`。
 
 示例：
 
@@ -85,7 +85,7 @@ sing-box `v1.14.2` 已有基础构件：
       },
       {
         "tag": "rf-resolver-vendor-a",
-        "type": "routefluent_resolver_group",
+        "type": "rf_resolver_group",
         "primary": ["vendor-a-doh-1"],
         "fallback": "local-system",
         "fallback_enabled": true,
@@ -98,7 +98,7 @@ sing-box `v1.14.2` 已有基础构件：
       },
       {
         "tag": "rf-resolver-vendor-b",
-        "type": "routefluent_resolver_group",
+        "type": "rf_resolver_group",
         "primary": ["vendor-b-doh-1"],
         "fallback": "local-system",
         "fallback_enabled": true,
@@ -111,7 +111,7 @@ sing-box `v1.14.2` 已有基础构件：
       },
       {
         "tag": "rf-resolver-no-doh-local",
-        "type": "routefluent_resolver_group",
+        "type": "rf_resolver_group",
         "primary": [],
         "fallback": "local-system",
         "fallback_enabled": true,
@@ -164,14 +164,14 @@ sing-box `v1.14.2` 已有基础构件：
 
 ## 严格校验规则
 
-1. `routefluent_resolver_group` 必须引用已存在的 DNS server tag。
+1. `rf_resolver_group` 必须引用已存在的 DNS server tag。
 2. `mode` 只允许省略或为 `local_only`。
 3. 常规模式下 `primary` 至少包含一个 DoH server。
 4. `local_only` 模式下 `primary` 必须为空，且必须配置 `fallback`。
 5. 常规模式下 `fallback_enabled=true` 时，`fallback` 必须引用本机 local resolver，且 `probe_domains` 必须非空；否则 `sing-box check -c` 必须失败。
 6. `fallback_enabled=false` 时，如果所有 DoH 不可用，必须返回解析错误，不能静默使用本机 DNS。
 7. DoH endpoint 的 `server` 如果是域名，必须显式配置 bootstrap `domain_resolver`，不能隐式借用业务解析组。
-8. outbound `server` 是域名时，生成器必须显式设置 `domain_resolver.server` 到对应 `routefluent_resolver_group`；需要 route 层域名解析时也必须设置 `route.default_domain_resolver`。
+8. outbound `server` 是域名时，生成器必须显式设置 `domain_resolver.server` 到对应 `rf_resolver_group`；需要 route 层域名解析时也必须设置 `route.default_domain_resolver`。
 9. 未知字段、错误类型、重复 tag、循环引用和空 fallback tag 都必须在 `sing-box check -c` 阶段失败。
 10. wrapper 只允许包装现有 DNS transport，不允许自己解析订阅字段或改写 outbound。
 
@@ -283,9 +283,9 @@ DoH server 自身可能也是域名，例如 `dns.vendor-a.example`。这类 boo
 - DoH URL path 可按配置安全级别决定是否脱敏。
 - 失败日志应可定位到 resolver tag，而不是只记录“DNS failed”。
 
-## 与 RouteFluent 服务端预解析的关系
+## 与 Server 预解析的关系
 
-RouteFluent 仍保留服务端预解析 IP 下发能力。sing-box 侧新增能力用于以下场景：
+Server 仍保留预解析 IP 下发能力。sing-box 侧新增能力用于以下场景：
 
 - 线路商家提供 DoH，且希望终端按商家解析结果连接代理 server。
 - 终端网络环境变化较频繁，服务端预解析结果可能不如终端侧 DoH 合适。
@@ -304,9 +304,9 @@ RouteFluent 仍保留服务端预解析 IP 下发能力。sing-box 侧新增能�
 
 建议只做窄范围 patch：
 
-1. 在 `option/dns.go` 增加 `routefluent_resolver_group` 配置结构。
+1. 在 `option/dns.go` 增加 `rf_resolver_group` 配置结构。
 2. 在 DNS transport registry 中注册新类型。
-3. 新增 `dns/transport/routefluentgroup` 包，包装已有 `adapter.DNSTransport`。
+3. 新增 `dns/transport/rfgroup` 包，包装已有 `adapter.DNSTransport`。
 4. wrapper 内维护 primary DoH 的健康状态、probe 定时器和 fallback 证据。
 5. outbound 仍使用原生 `domain_resolver.server` 绑定该 wrapper tag。
 6. 实现上游 `adapter.DNSTransportWithEnvironment`，把解析组健康状态纳入 DNS cache key，避免恢复后继续命中旧 fallback 结果。

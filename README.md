@@ -17,7 +17,7 @@ RF 的受控制品构建仓库。它以固定的上游 sing-box 版本为基线�
 | sing-box | `v1.14.2` / `af6e64c3b69e6132ebaee0e1a3d24e93903f6709` |
 | sing-anytls（上游依赖） | `v0.0.11` / `130d2e61b8895727bfed4942c535e91b246a9603` |
 | RF patch id | `rf-dns-query-recipe-check-v1` |
-| 版本名 | `1.14.2-rf-dns.2` |
+| 版本名 | `1.14.2-rf-dns.3` |
 | 默认 build tags | `with_utls with_clash_api` |
 | 目标 | `linux/amd64`, `CGO_ENABLED=0` |
 
@@ -73,7 +73,7 @@ sing-box 1.13.16 起原生支持 AnyTLS `client_metadata`。RF 编译器只生�
 
 ## 本地构建与验证
 
-依赖 Git、Go 1.24 和 Python 3.9+：
+依赖 Git、Go 1.25.5 和 Python 3.9+：
 
 ```bash
 python build_rf_sing_box.py
@@ -104,18 +104,18 @@ python3 scripts/rf_dns_runtime_smoke.py --sing-box ./dist/sing-box-linux-amd64
 版本输出必须包含：
 
 ```text
-1.14.2-rf-dns.2
+1.14.2-rf-dns.3
 ```
 
 ## GitHub Release
 
-`.github/workflows/release.yml` 是实际发布流程；`docs/release-workflow.yml` 是审计副本。`v*` tag 会触发构建、静态配置校验、DNS runtime smoke、checksum 生成和 GitHub Release 发布。
+`.github/workflows/release.yml` 是唯一发布流程。`v*` tag 会触发构建、静态配置校验、DNS runtime smoke、checksum 生成和 GitHub Release 发布。
 
 当前 tag：
 
 ```bash
-git tag v1.14.2-rf-dns.2
-git push origin v1.14.2-rf-dns.2
+git tag v1.14.2-rf-dns.3
+git push origin v1.14.2-rf-dns.3
 ```
 
 发布资产：
@@ -129,7 +129,7 @@ git push origin v1.14.2-rf-dns.2
 发布制品模式：
 
 ```bash
-VERSION=v1.14.2-rf-dns.2
+VERSION=v1.14.2-rf-dns.3
 BASE=https://github.com/DavidYordan/routefluent-sing-box/releases/download/$VERSION
 
 curl -L -o sing-box-linux-amd64 "$BASE/sing-box-linux-amd64"

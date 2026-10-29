@@ -33,7 +33,7 @@ FEATURE_UPSTREAM_ANYTLS_CLIENT_METADATA = "upstream_anytls_client_metadata"
 FEATURE_RF_DNS_RESOLVER_GROUP = "rf_dns_resolver_group"
 FEATURE_RF_INGRESS_BINDING = "rf_ingress_binding"
 FEATURE_RF_DNS_CHECK_START_VALIDATION = "rf_dns_check_start_validation"
-PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.2"
+PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.3"
 DEFAULT_TAGS = "with_utls with_clash_api"
 
 
