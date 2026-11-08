@@ -25,6 +25,10 @@ jobs:
       - name: Build
         run: python3 build_rf_sing_box.py
 
+      - name: Request scope regressions
+        working-directory: work/src/sing-box-1.14.2
+        run: go test ./dns/transport/rfgroup ./dns/transport/rfbinding
+
       - name: Smoke check
         run: |
           ./dist/sing-box-linux-amd64 version
@@ -40,12 +44,8 @@ jobs:
             echo "invalid local primary resolver unexpectedly passed"
             exit 1
           fi
-          if ./dist/sing-box-linux-amd64 check -c testdata/rf-dns-invalid-fallback-https.json; then
-            echo "invalid HTTPS fallback resolver unexpectedly passed"
-            exit 1
-          fi
-          if ./dist/sing-box-linux-amd64 check -c testdata/rf-dns-invalid-fallback-missing-probes.json; then
-            echo "fallback without probe_domains unexpectedly passed"
+          if ./dist/sing-box-linux-amd64 check -c testdata/rf-dns-invalid-retired-fields.json; then
+            echo "retired resolver health fields unexpectedly passed"
             exit 1
           fi
           python3 scripts/rf_dns_runtime_smoke.py --sing-box ./dist/sing-box-linux-amd64

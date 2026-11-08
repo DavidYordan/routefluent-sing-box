@@ -1,14 +1,12 @@
 {
-  "log": { "disabled": true },
+  "log": {
+    "disabled": true
+  },
   "dns": {
     "servers": [
-      { "type": "local", "tag": "local-system" },
       {
-        "type": "rf_resolver_group",
-        "tag": "asset-resolver",
-        "mode": "local_only",
-        "fallback": "local-system",
-        "fallback_enabled": true
+        "type": "local",
+        "tag": "local-system"
       },
       {
         "type": "rf_ingress_binding",
@@ -16,13 +14,18 @@
         "binding_file": "/var/lib/rf/state/provider-ingress/bindings/line-7.json",
         "logical_domain": "edge.example.com",
         "query_name": "entry.example.net",
-        "resolver": "asset-resolver"
+        "resolver": "local-system"
       }
     ],
     "final": "ingress-binding-7"
   },
   "inbounds": [
-    { "type": "socks", "tag": "socks", "listen": "127.0.0.1", "listen_port": 1080 }
+    {
+      "type": "socks",
+      "tag": "socks",
+      "listen": "127.0.0.1",
+      "listen_port": 1080
+    }
   ],
   "outbounds": [
     {
@@ -30,8 +33,13 @@
       "tag": "proxy",
       "server": "edge.example.com",
       "server_port": 1080,
-      "domain_resolver": { "server": "ingress-binding-7", "strategy": "ipv4_only" }
+      "domain_resolver": {
+        "server": "ingress-binding-7",
+        "strategy": "ipv4_only"
+      }
     }
   ],
-  "route": { "final": "proxy" }
+  "route": {
+    "final": "proxy"
+  }
 }

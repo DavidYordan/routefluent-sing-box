@@ -2,10 +2,8 @@ package rfgroup
 
 import (
 	"context"
-	"errors"
 	"net/netip"
 	"testing"
-	"time"
 
 	"github.com/sagernet/sing-box/adapter"
 	C "github.com/sagernet/sing-box/constant"
@@ -67,6 +65,9 @@ func (t *fakeTransport) Close() error                         { return nil }
 func (t *fakeTransport) Reset()                               {}
 func (t *fakeTransport) Exchange(ctx context.Context, message *mDNS.Msg) (*mDNS.Msg, error) {
 	t.calls++
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if len(t.results) == 0 {
 		return successResponse(message, "192.0.2.1", 600), nil
 	}
@@ -118,174 +119,62 @@ func fixedResponse(request *mDNS.Msg, rcode int) *mDNS.Msg {
 	return response
 }
 
-func testGroup(primary []*primaryState, fallback adapter.DNSTransport, fallbackEnabled bool) *Transport {
-	return &Transport{
-		TransportAdapter:  boxdns.NewTransportAdapter(C.DNSTypeRFResolverGroup, "rf-group", nil),
-		logger:            log.NewNOPFactory().Logger(),
-		primaries:         primary,
-		fallback:          fallback,
-		fallbackEnabled:   fallbackEnabled,
-		failureThreshold:  1,
-		fallbackTTLCap:    time.Second,
-		unhealthyCooldown: 0,
-		closed:            make(chan struct{}),
+func TestTransportErrorsTryDeclaredPeersForThisRequestOnly(t *testing.T) {
+	first := newFakeTransport(C.DNSTypeHTTPS, "first", fakeResult{err: context.DeadlineExceeded})
+	second := newFakeTransport(C.DNSTypeHTTPS, "second")
+	group := configuredTestGroup(t, first, second)
+	before := group.Environment()
+	for range 3 {
+		response, err := group.Exchange(context.Background(), question())
+		require.NoError(t, err)
+		require.Equal(t, mDNS.RcodeSuccess, response.Rcode)
 	}
+	require.Equal(t, 3, first.calls)
+	require.Equal(t, 3, second.calls)
+	require.Equal(t, before, group.Environment())
 }
 
-func TestExchangePrefersPrimary(t *testing.T) {
-	primary := newFakeTransport(C.DNSTypeHTTPS, "doh", fakeResult{response: successResponse(question(), "192.0.2.10", 600)})
-	fallback := newFakeTransport(C.DNSTypeLocal, "local", fakeResult{response: successResponse(question(), "192.0.2.20", 600)})
-	group := testGroup([]*primaryState{{tag: "doh", transport: primary, state: stateHealthy}}, fallback, true)
-
-	response, err := group.Exchange(context.Background(), question())
-	require.NoError(t, err)
-	require.Equal(t, mDNS.RcodeSuccess, response.Rcode)
-	require.Equal(t, 1, primary.calls)
-	require.Zero(t, fallback.calls)
+func TestPrimaryFailureKeepsCauseAndDoesNotChangeCacheAuthority(t *testing.T) {
+	primary := newFakeTransport(C.DNSTypeHTTPS, "doh", fakeResult{err: context.DeadlineExceeded})
+	group := configuredTestGroup(t, primary)
+	before := group.Environment()
+	for range 3 {
+		response, err := group.Exchange(context.Background(), question())
+		require.Nil(t, response)
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+	}
+	require.Equal(t, 3, primary.calls)
+	require.Equal(t, before, group.Environment())
 }
 
-func TestExchangeTriesSecondPrimaryBeforeFallback(t *testing.T) {
-	primaryA := newFakeTransport(C.DNSTypeHTTPS, "doh-a", fakeResult{err: errors.New("timeout")})
-	primaryB := newFakeTransport(C.DNSTypeHTTPS, "doh-b", fakeResult{response: successResponse(question(), "192.0.2.30", 600)})
-	fallback := newFakeTransport(C.DNSTypeLocal, "local", fakeResult{response: successResponse(question(), "192.0.2.40", 600)})
-	group := testGroup([]*primaryState{
-		{tag: "doh-a", transport: primaryA, state: stateHealthy},
-		{tag: "doh-b", transport: primaryB, state: stateHealthy},
-	}, fallback, true)
-
-	response, err := group.Exchange(context.Background(), question())
-	require.NoError(t, err)
-	require.Equal(t, mDNS.RcodeSuccess, response.Rcode)
-	require.Equal(t, 1, primaryA.calls)
-	require.Equal(t, 1, primaryB.calls)
-	require.Zero(t, fallback.calls)
-}
-
-func TestExchangeFallsBackWhenAllPrimaryFail(t *testing.T) {
-	primary := newFakeTransport(C.DNSTypeHTTPS, "doh", fakeResult{err: errors.New("tls failure")})
-	fallback := newFakeTransport(C.DNSTypeLocal, "local", fakeResult{response: successResponse(question(), "192.0.2.50", 600)})
-	group := testGroup([]*primaryState{{tag: "doh", transport: primary, state: stateHealthy}}, fallback, true)
-
-	response, err := group.Exchange(context.Background(), question())
-	require.NoError(t, err)
-	require.Equal(t, mDNS.RcodeSuccess, response.Rcode)
-	require.Equal(t, uint32(1), response.Answer[0].Header().Ttl)
-	require.Equal(t, 1, primary.calls)
-	require.Equal(t, 1, fallback.calls)
-}
-
-func TestExchangeFailsClosedWhenFallbackDisabled(t *testing.T) {
-	primary := newFakeTransport(C.DNSTypeHTTPS, "doh", fakeResult{err: errors.New("tls failure")})
-	fallback := newFakeTransport(C.DNSTypeLocal, "local", fakeResult{response: successResponse(question(), "192.0.2.60", 600)})
-	group := testGroup([]*primaryState{{tag: "doh", transport: primary, state: stateHealthy}}, fallback, false)
-
-	_, err := group.Exchange(context.Background(), question())
-	require.Error(t, err)
-	require.Equal(t, 1, primary.calls)
-	require.Zero(t, fallback.calls)
-}
-
-func TestExchangeDoesNotFallbackOnNXDOMAIN(t *testing.T) {
-	primary := newFakeTransport(C.DNSTypeHTTPS, "doh", fakeResult{response: fixedResponse(question(), mDNS.RcodeNameError)})
-	fallback := newFakeTransport(C.DNSTypeLocal, "local", fakeResult{response: successResponse(question(), "192.0.2.70", 600)})
-	group := testGroup([]*primaryState{{tag: "doh", transport: primary, state: stateHealthy}}, fallback, true)
-
+func TestNXDOMAINIsReturnedWithoutAnotherResolver(t *testing.T) {
+	first := newFakeTransport(C.DNSTypeHTTPS, "first", fakeResult{response: fixedResponse(question(), mDNS.RcodeNameError)})
+	second := newFakeTransport(C.DNSTypeHTTPS, "second")
+	group := configuredTestGroup(t, first, second)
 	response, err := group.Exchange(context.Background(), question())
 	require.NoError(t, err)
 	require.Equal(t, mDNS.RcodeNameError, response.Rcode)
-	require.Equal(t, 1, primary.calls)
-	require.Zero(t, fallback.calls)
+	require.Zero(t, second.calls)
 }
 
-func TestExchangeRecoversPrimaryAfterFallback(t *testing.T) {
-	primary := newFakeTransport(
-		C.DNSTypeHTTPS,
-		"doh",
-		fakeResult{err: errors.New("timeout")},
-		fakeResult{response: successResponse(question(), "192.0.2.80", 600)},
-	)
-	fallback := newFakeTransport(C.DNSTypeLocal, "local", fakeResult{response: successResponse(question(), "192.0.2.90", 600)})
-	group := testGroup([]*primaryState{{tag: "doh", transport: primary, state: stateHealthy}}, fallback, true)
-
-	_, err := group.Exchange(context.Background(), question())
-	require.NoError(t, err)
-	require.Equal(t, 1, fallback.calls)
-
-	response, err := group.Exchange(context.Background(), question())
-	require.NoError(t, err)
-	require.Equal(t, mDNS.RcodeSuccess, response.Rcode)
-	require.Equal(t, 2, primary.calls)
-	require.Equal(t, 1, fallback.calls)
-}
-
-func TestProbeRecoveryRequiresConfiguredSuccessThreshold(t *testing.T) {
-	primary := newFakeTransport(
-		C.DNSTypeHTTPS,
-		"doh",
-		fakeResult{response: successResponse(question(), "192.0.2.91", 600)},
-		fakeResult{response: successResponse(question(), "192.0.2.92", 600)},
-	)
-	fallback := newFakeTransport(C.DNSTypeLocal, "local")
-	group := testGroup([]*primaryState{{
-		tag:       "doh",
-		transport: primary,
-		state:     stateUnhealthy,
-		nextProbe: time.Now().Add(-time.Second),
-	}}, fallback, true)
-	group.probeDomains = []string{"probe.example"}
-	group.probeInterval = time.Second
-	group.recoverySuccessThreshold = 2
-
-	group.probeUnhealthy()
-	require.Equal(t, stateUnhealthy, group.primaries[0].state)
-	require.Equal(t, 1, group.primaries[0].successes)
-
-	group.primaries[0].nextProbe = time.Now().Add(-time.Second)
-	group.probeUnhealthy()
-	require.Equal(t, stateHealthy, group.primaries[0].state)
-	require.Zero(t, group.primaries[0].successes)
-}
-
-func TestLocalOnlyUsesFallbackAndHasStableCacheEnvironment(t *testing.T) {
-	fallback := newFakeTransport(C.DNSTypeLocal, "local", fakeResult{response: successResponse(question(), "192.0.2.100", 600)})
-	group := testGroup(nil, fallback, true)
-	group.localOnly = true
-
-	response, err := group.Exchange(context.Background(), question())
-	require.NoError(t, err)
-	require.Equal(t, mDNS.RcodeSuccess, response.Rcode)
-	require.Equal(t, 1, fallback.calls)
-	require.Equal(t, []string{"mode=local_only", "fallback="}, group.Environment())
-}
-
-func TestEnvironmentChangesWithPrimaryHealthState(t *testing.T) {
-	primary := newFakeTransport(C.DNSTypeHTTPS, "doh", fakeResult{err: errors.New("timeout")})
-	group := testGroup([]*primaryState{{tag: "doh", transport: primary, state: stateHealthy}}, nil, false)
-	before := group.Environment()
-
-	_, err := group.Exchange(context.Background(), question())
-	require.Error(t, err)
-	after := group.Environment()
-	require.NotEqual(t, before, after)
-	require.Contains(t, after[2], "doh:state=2:failures=1")
-}
-
-func TestStartRejectsNonDoHPrimaryAndNonLocalFallback(t *testing.T) {
+func TestNativeStartRejectsLocalAsADoHPrimary(t *testing.T) {
 	manager := &fakeManager{transports: map[string]adapter.DNSTransport{
-		"udp":   newFakeTransport(C.DNSTypeUDP, "udp"),
-		"https": newFakeTransport(C.DNSTypeHTTPS, "https"),
+		"local": newFakeTransport(C.DNSTypeLocal, "local"),
 	}}
 	ctx := service.ContextWithDefaultRegistry(context.Background())
 	service.MustRegister[adapter.DNSTransportManager](ctx, manager)
-
-	transport, err := NewTransport(ctx, log.NewNOPFactory().Logger(), "rf", option.RFResolverGroupDNSServerOptions{
-		Primary:         []string{"udp"},
-		Fallback:        "https",
-		FallbackEnabled: true,
-		ProbeDomains:    []string{"example.com"},
-	})
+	group, err := NewTransport(ctx, log.NewNOPFactory().Logger(), "group", option.RFResolverGroupDNSServerOptions{Primary: []string{"local"}})
 	require.NoError(t, err)
-	err = transport.Start(adapter.StartStateStart)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "must be https or h3")
+	require.ErrorContains(t, group.Start(adapter.StartStateStart), "must be https or h3")
+}
+
+func TestGroupWithoutNativeStartCannotReturnEmptySuccess(t *testing.T) {
+	manager := &fakeManager{transports: map[string]adapter.DNSTransport{}}
+	ctx := service.ContextWithDefaultRegistry(context.Background())
+	service.MustRegister[adapter.DNSTransportManager](ctx, manager)
+	group, err := NewTransport(ctx, log.NewNOPFactory().Logger(), "group", option.RFResolverGroupDNSServerOptions{Primary: []string{"doh"}})
+	require.NoError(t, err)
+	response, err := group.Exchange(context.Background(), question())
+	require.Nil(t, response)
+	require.ErrorContains(t, err, "no initialized primary")
 }

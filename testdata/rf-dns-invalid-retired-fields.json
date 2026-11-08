@@ -5,33 +5,22 @@
   "dns": {
     "servers": [
       {
-        "tag": "primary-doh",
+        "tag": "doh",
         "type": "https",
         "server": "1.1.1.1",
         "server_port": 443,
         "path": "/dns-query"
       },
       {
-        "tag": "fallback-doh",
-        "type": "https",
-        "server": "1.0.0.1",
-        "server_port": 443,
-        "path": "/dns-query"
-      },
-      {
-        "tag": "rf-invalid-fallback",
+        "tag": "invalid",
         "type": "rf_resolver_group",
         "primary": [
-          "primary-doh"
+          "doh"
         ],
-        "fallback": "fallback-doh",
-        "fallback_enabled": true,
-        "probe_domains": [
-          "www.gstatic.com"
-        ]
+        "failure_threshold": 2
       }
     ],
-    "final": "rf-invalid-fallback"
+    "final": "invalid"
   },
   "outbounds": [
     {
@@ -41,7 +30,7 @@
   ],
   "route": {
     "default_domain_resolver": {
-      "server": "rf-invalid-fallback",
+      "server": "invalid",
       "strategy": "ipv4_only"
     },
     "final": "direct"

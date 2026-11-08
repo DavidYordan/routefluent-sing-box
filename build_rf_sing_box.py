@@ -33,7 +33,7 @@ FEATURE_UPSTREAM_ANYTLS_CLIENT_METADATA = "upstream_anytls_client_metadata"
 FEATURE_RF_DNS_RESOLVER_GROUP = "rf_dns_resolver_group"
 FEATURE_RF_INGRESS_BINDING = "rf_ingress_binding"
 FEATURE_RF_DNS_CHECK_START_VALIDATION = "rf_dns_check_start_validation"
-PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.3"
+PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.4"
 DEFAULT_TAGS = "with_utls with_clash_api"
 
 
@@ -186,15 +186,6 @@ def patch_sing_box(source_dir: Path) -> None:
         "type DHCPDNSServerOptions struct {\n\tLocalDNSServerOptions\n\tInterface string `json:\"interface,omitempty\"`\n}\n\n"
         "type RFResolverGroupDNSServerOptions struct {\n"
         "\tPrimary                  []string           `json:\"primary,omitempty\"`\n"
-        "\tFallback                 string             `json:\"fallback,omitempty\"`\n"
-        "\tFallbackEnabled          bool               `json:\"fallback_enabled,omitempty\"`\n"
-        "\tMode                     string             `json:\"mode,omitempty\"`\n"
-        "\tProbeDomains             []string           `json:\"probe_domains,omitempty\"`\n"
-        "\tFailureThreshold         int                `json:\"failure_threshold,omitempty\"`\n"
-        "\tRecoverySuccessThreshold int                `json:\"recovery_success_threshold,omitempty\"`\n"
-        "\tProbeInterval            badoption.Duration `json:\"probe_interval,omitempty\"`\n"
-        "\tUnhealthyCooldown        badoption.Duration `json:\"unhealthy_cooldown,omitempty\"`\n"
-        "\tFallbackTTLCap           badoption.Duration `json:\"fallback_ttl_cap,omitempty\"`\n"
         "}\n\n"
         "type RFIngressBindingDNSServerOptions struct {\n"
         "\tBindingFile   string `json:\"binding_file\"`\n"
@@ -219,6 +210,7 @@ def patch_sing_box(source_dir: Path) -> None:
     )
     copy_patch_file(source_dir, "dns/transport/rfgroup/rfgroup.go")
     copy_patch_file(source_dir, "dns/transport/rfgroup/rfgroup_test.go")
+    copy_patch_file(source_dir, "dns/transport/rfgroup/request_scope_test.go")
     copy_patch_file(source_dir, "dns/transport/rfbinding/rfbinding.go")
     copy_patch_file(source_dir, "dns/transport/rfbinding/rfbinding_test.go")
 
@@ -256,6 +248,7 @@ def build(args: argparse.Namespace) -> None:
         sing_box_dir / "dns" / "transport" / "rfbinding" / "rfbinding_test.go",
         sing_box_dir / "dns" / "transport" / "rfgroup" / "rfgroup.go",
         sing_box_dir / "dns" / "transport" / "rfgroup" / "rfgroup_test.go",
+        sing_box_dir / "dns" / "transport" / "rfgroup" / "request_scope_test.go",
         sing_box_dir / "include" / "registry.go",
         sing_box_dir / "option" / "dns.go",
     ])

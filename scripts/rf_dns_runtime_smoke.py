@@ -10,7 +10,7 @@ Then it validates three runtime dial paths:
 
 1. primary DoH resolves a custom domain and fetch succeeds;
 2. strict mode with dead DoH and no fallback fails closed;
-3. local fallback mode with dead DoH resolves localhost and fetch succeeds.
+3. explicit system DNS resolves localhost independently of DoH.
 """
 
 from __future__ import annotations
@@ -208,10 +208,9 @@ def serve_http(
 def rf_config(
     *,
     doh_port: int,
-    fallback_enabled: bool,
-    fallback: bool,
     http_port: int,
     query_name: str = "",
+    local_only: bool = False,
 ) -> dict[str, object]:
     primary: dict[str, object] = {
         "tag": "mock-doh",
@@ -225,27 +224,17 @@ def rf_config(
             "server_name": "localhost",
         },
     }
-    servers: list[dict[str, object]] = [
-        {"tag": "local-system", "type": "local"},
-        primary,
-    ]
+    servers: list[dict[str, object]] = [primary]
     group: dict[str, object] = {
         "tag": "rf-runtime",
         "type": "rf_resolver_group",
         "primary": ["mock-doh"],
     }
-    if fallback:
-        group["fallback"] = "local-system"
-    if fallback_enabled:
-        group["fallback_enabled"] = True
-        group["probe_domains"] = ["localhost"]
-        group["failure_threshold"] = 1
-        group["recovery_success_threshold"] = 1
-        group["probe_interval"] = "1s"
-        group["unhealthy_cooldown"] = "1s"
-        group["fallback_ttl_cap"] = "1s"
     servers.append(group)
     resolver_tag = "rf-runtime"
+    if local_only:
+        servers = [{"tag": "local-system", "type": "local"}]
+        resolver_tag = "local-system"
     if query_name:
         servers.append({
             "tag": "ingress-binding-7",
@@ -353,8 +342,6 @@ def main() -> int:
                 primary_config,
                 rf_config(
                     doh_port=doh_port,
-                    fallback_enabled=False,
-                    fallback=False,
                     http_port=http_port,
                 ),
             )
@@ -369,8 +356,6 @@ def main() -> int:
                 alias_config,
                 rf_config(
                     doh_port=doh_port,
-                    fallback_enabled=False,
-                    fallback=False,
                     http_port=http_port,
                     query_name="rf-alias.test",
                 ),
@@ -387,33 +372,30 @@ def main() -> int:
                 strict_config,
                 rf_config(
                     doh_port=9,
-                    fallback_enabled=False,
-                    fallback=False,
                     http_port=http_port,
                 ),
             )
             require_failure(
                 "strict mode fails closed when primary DoH is unavailable",
                 run_fetch(sing_box, strict_config, f"http://{local_host}:{http_port}/"),
-                "primary DoH resolvers unavailable",
+                "resolver mock-doh:",
             )
 
             if os.name == "nt":
-                print("[SKIP] local fallback runtime success: sing-box local resolver on Windows does not resolve local hostnames consistently")
+                print("[SKIP] system resolver runtime: Windows local hostnames differ from the Linux target")
             else:
-                fallback_config = temp_dir / "fallback.json"
+                system_config = temp_dir / "system.json"
                 write_config(
-                    fallback_config,
+                    system_config,
                     rf_config(
                         doh_port=9,
-                        fallback_enabled=True,
-                        fallback=True,
+                        local_only=True,
                         http_port=http_port,
                     ),
                 )
                 require_success(
-                    "local fallback resolves when primary DoH is unavailable",
-                    run_fetch(sing_box, fallback_config, f"http://{local_host}:{http_port}/"),
+                    "explicit system resolver uses only the declared local transport",
+                    run_fetch(sing_box, system_config, f"http://{local_host}:{http_port}/"),
                 )
 
     return 0
