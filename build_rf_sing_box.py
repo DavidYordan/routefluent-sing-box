@@ -35,7 +35,7 @@ FEATURE_RF_DNS_RESOLVER_GROUP = "rf_dns_resolver_group"
 FEATURE_RF_INGRESS_BINDING = "rf_ingress_binding"
 FEATURE_RF_DNS_CHECK_START_VALIDATION = "rf_dns_check_start_validation"
 FEATURE_RF_NATIVE_CURRENT = "rf_native_current_root_observation"
-PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.5"
+PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.6"
 DEFAULT_TAGS = "with_utls with_clash_api"
 
 
@@ -170,6 +170,25 @@ def gofmt_files(paths: list[Path]) -> None:
 
 
 def patch_sing_box(source_dir: Path) -> None:
+    replace_once(
+        source_dir / "common/trafficcontrol/manager.go",
+        "type Manager struct {\n",
+        "type Manager struct {\n\trfTrafficEpochID string\n\trfTrafficEpochError error\n",
+    )
+    replace_once(
+        source_dir / "common/trafficcontrol/manager.go",
+        "func NewManager(outbound adapter.OutboundManager) *Manager {\n\treturn &Manager{\n",
+        "func NewManager(outbound adapter.OutboundManager) *Manager {\n\tepoch, epochErr := uuid.NewV4()\n\treturn &Manager{\n\t\trfTrafficEpochID: epoch.String(),\n\t\trfTrafficEpochError: epochErr,\n",
+    )
+    copy_patch_file(source_dir, "common/trafficcontrol/rf_epoch.go")
+    replace_once(
+        source_dir / "experimental/clashapi/connections.go",
+        "\t\tif r.Header.Get(\"Upgrade\") != \"websocket\" {\n",
+        "\t\tepoch, err := trafficManager.RFTrafficEpoch()\n"
+        "\t\tif err != nil {\n\t\t\thttp.Error(w, err.Error(), http.StatusInternalServerError)\n\t\t\treturn\n\t\t}\n"
+        "\t\tw.Header().Set(\"X-Rf-Traffic-Epoch\", epoch)\n"
+        "\t\tif r.Header.Get(\"Upgrade\") != \"websocket\" {\n",
+    )
     replace_once(
         source_dir / "cmd" / "sing-box" / "cmd_run.go",
         "\t\truntimeDebug.FreeOSMemory()\n",

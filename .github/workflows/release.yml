@@ -49,6 +49,7 @@ jobs:
             exit 1
           fi
           python3 scripts/rf_dns_runtime_smoke.py --sing-box ./dist/sing-box-linux-amd64
+          python3 scripts/rf_traffic_epoch_smoke.py --sing-box ./dist/sing-box-linux-amd64
 
       - name: Write checksums
         run: |
