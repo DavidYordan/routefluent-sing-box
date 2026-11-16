@@ -4,7 +4,8 @@
 Upstream sing-box 1.13.16 and later owns AnyTLS ``client_metadata``.  The
 RF patch is therefore limited to the provider-scoped DNS resolver
 group, the Device/LineAsset ingress-binding transport, and strict
-``sing-box check`` pre-start validation.
+``sing-box check`` pre-start validation, plus root-only observation of the
+business process's loaded input.
 """
 
 from __future__ import annotations
@@ -33,7 +34,8 @@ FEATURE_UPSTREAM_ANYTLS_CLIENT_METADATA = "upstream_anytls_client_metadata"
 FEATURE_RF_DNS_RESOLVER_GROUP = "rf_dns_resolver_group"
 FEATURE_RF_INGRESS_BINDING = "rf_ingress_binding"
 FEATURE_RF_DNS_CHECK_START_VALIDATION = "rf_dns_check_start_validation"
-PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.4"
+FEATURE_RF_NATIVE_CURRENT = "rf_native_current_root_observation"
+PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.5"
 DEFAULT_TAGS = "with_utls with_clash_api"
 
 
@@ -169,6 +171,18 @@ def gofmt_files(paths: list[Path]) -> None:
 
 def patch_sing_box(source_dir: Path) -> None:
     replace_once(
+        source_dir / "cmd" / "sing-box" / "cmd_run.go",
+        "\t\truntimeDebug.FreeOSMemory()\n",
+        "\t\tcloseRFCurrentObserve := startRFCurrentObserve(options.RawMessage)\n\t\truntimeDebug.FreeOSMemory()\n",
+    )
+    replace_once(
+        source_dir / "cmd" / "sing-box" / "cmd_run.go",
+        "\t\t\tcancel()\n\t\t\tcloseCtx, closed := context.WithCancel(context.Background())\n",
+        "\t\t\tcloseRFCurrentObserve()\n\t\t\tcancel()\n\t\t\tcloseCtx, closed := context.WithCancel(context.Background())\n",
+    )
+    copy_patch_file(source_dir, "cmd/sing-box/rf_current_linux.go")
+    copy_patch_file(source_dir, "cmd/sing-box/rf_current_other.go")
+    replace_once(
         source_dir / "cmd" / "sing-box" / "cmd_check.go",
         "\tif err == nil {\n\t\tinstance.Close()\n\t}\n\tcancel()\n\treturn err\n",
         "\tif err != nil {\n\t\tcancel()\n\t\treturn err\n\t}\n\terr = instance.PreStart()\n\tif err != nil {\n\t\tcancel()\n\t\treturn err\n\t}\n\terr = instance.Close()\n\tcancel()\n\treturn err\n",
@@ -276,6 +290,7 @@ def build(args: argparse.Namespace) -> None:
         "name": "sing-box",
         "patch_id": PATCH_ID,
         "features": [
+            FEATURE_RF_NATIVE_CURRENT,
             FEATURE_UPSTREAM_ANYTLS_CLIENT_METADATA,
             FEATURE_RF_DNS_RESOLVER_GROUP,
             FEATURE_RF_INGRESS_BINDING,

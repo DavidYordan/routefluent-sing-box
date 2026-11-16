@@ -1,6 +1,6 @@
 # RF sing-box
 
-RF 的受控制品构建仓库。它以固定的上游 sing-box 版本为基线，只维护 RF 尚未被上游覆盖的窄范围 DNS 能力；AnyTLS 客户端元数据使用上游正式字段 `client_metadata`，不再维护私有 `client` 字段。
+RF 的受控制品构建仓库。它以固定的上游 sing-box 版本为基线，维护 RF 尚未被上游覆盖的 DNS 能力及业务进程的私有输入观察；AnyTLS 客户端元数据使用上游正式字段 `client_metadata`。
 
 该仓库会：
 
@@ -17,11 +17,17 @@ RF 的受控制品构建仓库。它以固定的上游 sing-box 版本为基线�
 | sing-box | `v1.14.2` / `af6e64c3b69e6132ebaee0e1a3d24e93903f6709` |
 | sing-anytls（上游依赖） | `v0.0.11` / `130d2e61b8895727bfed4942c535e91b246a9603` |
 | RF patch id | `rf-dns-query-recipe-check-v1` |
-| 版本名 | `1.14.2-rf-dns.4` |
+| 版本名 | `1.14.2-rf-dns.5` |
 | 默认 build tags | `with_utls with_clash_api` |
 | 目标 | `linux/amd64`, `CGO_ENABLED=0` |
 
 ## 能力边界
+
+### 业务进程的已加载输入
+
+Linux 的 `run --rf-observe-current` 在原生实例成功启动后，为自身 PID 开启 abstract Unix socket `@rf-business-current-<PID>`。仅 UID 0 的本地 peer 可读取 `GET /v1/current`，非 root 在 HTTP 解码前关闭；响应是该实例已加载的配置字节，附 `Content-Length`、`X-Rf-Native-Pid` 和 `X-Rf-Config-Sha256`。磁盘配置后来变化不改变返回值。重载先关闭旧观察入口，新实例成功启动后才公开新输入；停止关闭 listener 和连接，不写快照、凭据或 socket 文件。
+
+这些字节可能含线路秘密，只供本机 root 消费；不得进入公开管理 API、日志或检测简报。绑定／服务失败只记录观察错误，不否决原生业务实例。普通控制加速器和临时 worker 不带该开关，不建立此入口。
 
 ### 上游 AnyTLS `client_metadata`
 
