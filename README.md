@@ -29,6 +29,10 @@ Linux 的 `run --rf-observe-current` 在原生实例成功启动后，为自身 
 
 这些字节可能含线路秘密，只供本机 root 消费；不得进入公开管理 API、日志或检测简报。绑定／服务失败只记录观察错误，不否决原生业务实例。普通控制加速器和临时 worker 不带该开关，不建立此入口。
 
+同一入口的 `GET /v1/connections` 返回 `rf.native_connections.v1`，沿用相同 PID／配置 SHA 响应头。`connections` 每项保存 `outbound_tag`、`peer_ipv4`、`peer_port` 和 `count`：事实取自本实例成功拨号的实际 TCP socket，按出站标签与对端分组，多 IP 并列。DNS transport 不取得业务出站归属；经其它出站转发的上层跳不借用底层对端。
+
+计数只覆盖实例仍持有的 TCP 连接，不表示协议认证、应用成功、UDP 或全部线路健康。数据在内存随 socket 关闭释放，最后一份引用关闭即删除对应键；重载创建新的观察 owner，不保留历史、独立 TTL 或轮询任务。读取方须用同份已加载输入把出站映射到线路／入口；未能对应或多 IP 不能压成虚假唯一地址。观察不参与拨号选择、截止或继续服务资格。
+
 ### 整机流量计数
 
 Clash `GET /connections` 的 `X-Rf-Traffic-Epoch` 与累计总量来自同一个原生 traffic manager。其 UUID 在 manager 创建时生成，同一实例的请求保持，原生重载（包括同 PID、同配置）生成新值；不使用 PID、配置摘要或时间间隔猜测计数连续性。生成失败只令这次可选观察返回错误，不拒绝原生业务启动。

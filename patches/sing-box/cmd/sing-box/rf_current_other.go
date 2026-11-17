@@ -2,4 +2,11 @@
 
 package main
 
-func startRFCurrentObserve([]byte) func() { return func() {} }
+import (
+	"context"
+	"github.com/sagernet/sing-box/common/rfconnection"
+)
+
+func rfCurrentContext(ctx context.Context) context.Context { return ctx }
+
+func startRFCurrentObserve([]byte, func() []rfconnection.Connection) func() { return func() {} }

@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -14,7 +15,9 @@ import (
 	"strconv"
 	"syscall"
 
+	"github.com/sagernet/sing-box/common/rfconnection"
 	"github.com/sagernet/sing-box/log"
+	"github.com/sagernet/sing/service"
 )
 
 var rfObserveCurrent bool
@@ -25,9 +28,16 @@ func init() {
 
 type rfRootPeer struct{}
 
+func rfCurrentContext(ctx context.Context) context.Context {
+	if !rfObserveCurrent {
+		return ctx
+	}
+	return service.ContextWith(ctx, rfconnection.New())
+}
+
 // Called only after this instance's native Start succeeds. Failure is an
 // observation error and never changes the already-running business instance.
-func startRFCurrentObserve(raw []byte) func() {
+func startRFCurrentObserve(raw []byte, connections func() []rfconnection.Connection) func() {
 	if !rfObserveCurrent {
 		return func() {}
 	}
@@ -60,7 +70,7 @@ func startRFCurrentObserve(raw []byte) func() {
 				http.Error(w, "root peer required", http.StatusForbidden)
 				return
 			}
-			if r.URL.Path != "/v1/current" || r.URL.RawQuery != "" {
+			if (r.URL.Path != "/v1/current" && r.URL.Path != "/v1/connections") || r.URL.RawQuery != "" {
 				http.NotFound(w, r)
 				return
 			}
@@ -72,6 +82,13 @@ func startRFCurrentObserve(raw []byte) func() {
 			w.Header().Set("Cache-Control", "no-store")
 			w.Header().Set("X-Rf-Native-Pid", strconv.Itoa(pid))
 			w.Header().Set("X-Rf-Config-Sha256", hex.EncodeToString(digest[:]))
+			if r.URL.Path == "/v1/connections" {
+				_ = json.NewEncoder(w).Encode(struct {
+					Schema      string                    `json:"schema"`
+					Connections []rfconnection.Connection `json:"connections"`
+				}{Schema: "rf.native_connections.v1", Connections: connections()})
+				return
+			}
 			w.Header().Set("Content-Length", strconv.Itoa(len(content)))
 			_, _ = w.Write(content)
 		}),

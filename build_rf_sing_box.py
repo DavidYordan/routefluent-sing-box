@@ -192,7 +192,7 @@ def patch_sing_box(source_dir: Path) -> None:
     replace_once(
         source_dir / "cmd" / "sing-box" / "cmd_run.go",
         "\t\truntimeDebug.FreeOSMemory()\n",
-        "\t\tcloseRFCurrentObserve := startRFCurrentObserve(options.RawMessage)\n\t\truntimeDebug.FreeOSMemory()\n",
+        "\t\tcloseRFCurrentObserve := startRFCurrentObserve(options.RawMessage, instance.RFConnectionsSnapshot)\n\t\truntimeDebug.FreeOSMemory()\n",
     )
     replace_once(
         source_dir / "cmd" / "sing-box" / "cmd_run.go",
@@ -201,6 +201,26 @@ def patch_sing_box(source_dir: Path) -> None:
     )
     copy_patch_file(source_dir, "cmd/sing-box/rf_current_linux.go")
     copy_patch_file(source_dir, "cmd/sing-box/rf_current_other.go")
+    replace_once(
+        source_dir / "cmd/sing-box/cmd_run.go",
+        "\tctx, cancel := context.WithCancel(service.ExtendContext(globalCtx))\n",
+        "\tctx, cancel := context.WithCancel(service.ExtendContext(globalCtx))\n\tctx = rfCurrentContext(ctx)\n",
+    )
+    replace_once(
+        source_dir / "common/dialer/default.go",
+        '\t"github.com/sagernet/sing-box/common/listener"\n',
+        '\t"github.com/sagernet/sing-box/common/listener"\n\t"github.com/sagernet/sing-box/common/rfconnection"\n',
+    )
+    replace_once(source_dir / "common/dialer/default.go", "type DefaultDialer struct {\n", "type DefaultDialer struct {\n\trfConnections *rfconnection.Observer\n")
+    replace_once(source_dir / "common/dialer/default.go", "\treturn &DefaultDialer{\n", "\treturn &DefaultDialer{\n\t\trfConnections: service.FromContext[*rfconnection.Observer](ctx),\n")
+    replace_once(
+        source_dir / "common/dialer/default.go",
+        "\tif d.connectionManager != nil {\n\t\tconn = d.connectionManager.TrackConn(conn)\n",
+        "\tif d.rfConnections != nil {\n\t\tconn = d.rfConnections.Track(ctx, conn)\n\t}\n\tif d.connectionManager != nil {\n\t\tconn = d.connectionManager.TrackConn(conn)\n",
+    )
+    copy_patch_file(source_dir, "common/rfconnection/connections.go")
+    copy_patch_file(source_dir, "common/rfconnection/connections_test.go")
+    copy_patch_file(source_dir, "rf_connections.go")
     replace_once(
         source_dir / "cmd" / "sing-box" / "cmd_check.go",
         "\tif err == nil {\n\t\tinstance.Close()\n\t}\n\tcancel()\n\treturn err\n",
