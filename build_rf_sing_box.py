@@ -36,7 +36,7 @@ FEATURE_RF_INGRESS_BINDING = "rf_ingress_binding"
 FEATURE_RF_DNS_CHECK_START_VALIDATION = "rf_dns_check_start_validation"
 FEATURE_RF_NATIVE_CURRENT = "rf_native_current_root_observation"
 FEATURE_RF_ROUTE_CONNECTIONS = "rf_native_route_connections"
-PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.6"
+PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.7"
 DEFAULT_TAGS = "with_utls with_clash_api"
 
 
