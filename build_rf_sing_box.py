@@ -35,6 +35,7 @@ FEATURE_RF_DNS_RESOLVER_GROUP = "rf_dns_resolver_group"
 FEATURE_RF_INGRESS_BINDING = "rf_ingress_binding"
 FEATURE_RF_DNS_CHECK_START_VALIDATION = "rf_dns_check_start_validation"
 FEATURE_RF_NATIVE_CURRENT = "rf_native_current_root_observation"
+FEATURE_RF_ROUTE_CONNECTIONS = "rf_native_route_connections"
 PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.6"
 DEFAULT_TAGS = "with_utls with_clash_api"
 
@@ -170,6 +171,13 @@ def gofmt_files(paths: list[Path]) -> None:
 
 
 def patch_sing_box(source_dir: Path) -> None:
+    # Passive compiler-owned connection references travel with the actual
+    # loaded bytes. Native routing never consumes or qualifies them.
+    replace_once(
+        source_dir / "option/options.go",
+        "type _Options struct {\n",
+        "type _Options struct {\n\tRFRouteConnections json.RawMessage `json:\"rf_route_connections,omitempty\"`\n",
+    )
     replace_once(
         source_dir / "common/trafficcontrol/manager.go",
         "type Manager struct {\n",
@@ -295,6 +303,7 @@ def build(args: argparse.Namespace) -> None:
 
     go = require_tool("go")
     gofmt_files([
+        sing_box_dir / "option" / "options.go",
         sing_box_dir / "cmd" / "sing-box" / "cmd_check.go",
         sing_box_dir / "constant" / "dns.go",
         sing_box_dir / "dns" / "transport" / "rfbinding" / "rfbinding.go",
@@ -330,6 +339,7 @@ def build(args: argparse.Namespace) -> None:
         "patch_id": PATCH_ID,
         "features": [
             FEATURE_RF_NATIVE_CURRENT,
+            FEATURE_RF_ROUTE_CONNECTIONS,
             FEATURE_UPSTREAM_ANYTLS_CLIENT_METADATA,
             FEATURE_RF_DNS_RESOLVER_GROUP,
             FEATURE_RF_INGRESS_BINDING,
