@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"testing"
 
@@ -13,6 +14,42 @@ import (
 
 	mDNS "github.com/miekg/dns"
 )
+
+func TestPublicFamilyDoesNotQualifyBindingConsumption(t *testing.T) {
+	for _, mode := range []string{"explicit_ipv4", "resolver"} {
+		t.Run(mode, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "line-7.json")
+			writeBinding(t, path, mode, `"1.1.1.1"`, 3)
+			resolver := &recordingResolver{TransportAdapter: dns.NewTransportAdapter("local", "resolver", nil)}
+			transport := &Transport{TransportAdapter: dns.NewTransportAdapter("rf_ingress_binding", "ingress-binding-7", nil), bindingFile: path, logicalDomain: "edge.example.com", queryName: "edge.example.com", resolver: resolver}
+			before := transport.Environment()
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			raw = bytes.Replace(raw, []byte(`"endpoint_family_id":11`), []byte(`"endpoint_family_id":null`), 1)
+			if err := os.WriteFile(path, raw, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			request := new(mDNS.Msg)
+			request.SetQuestion("edge.example.com.", mDNS.TypeA)
+			response, err := transport.Exchange(t.Context(), request)
+			if err != nil {
+				t.Fatalf("public Family blocked native %s: %v", mode, err)
+			}
+			expected := "1.1.1.1"
+			if mode == "resolver" {
+				expected = "192.0.2.10"
+			}
+			if len(response.Answer) != 1 || response.Answer[0].(*mDNS.A).A.String() != expected {
+				t.Fatalf("native binding answer: %+v", response.Answer)
+			}
+			if !reflect.DeepEqual(before, transport.Environment()) {
+				t.Fatal("public metadata changed binding cache authority")
+			}
+		})
+	}
+}
 
 func TestExplicitBindingReturnsOneCurrentIPv4AndRevisionEnvironment(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "line-7.json")

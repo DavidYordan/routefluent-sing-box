@@ -44,7 +44,7 @@ type bindingCurrent struct {
 	TenantID                 uint64  `json:"tenant_id"`
 	DeviceID                 uint64  `json:"device_id"`
 	LineAssetID              uint64  `json:"line_asset_id"`
-	EndpointFamilyID         uint64  `json:"endpoint_family_id"`
+	EndpointFamilyID         *uint64 `json:"endpoint_family_id"`
 	LogicalDomain            string  `json:"logical_domain"`
 	Mode                     string  `json:"mode"`
 	ConnectIPv4              *string `json:"connect_ipv4"`
@@ -232,7 +232,7 @@ func (t *Transport) loadBinding() (bindingCurrent, error) {
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
 		return bindingCurrent{}, E.New("rf ingress binding contains trailing JSON")
 	}
-	if binding.Schema != bindingSchema || binding.TenantID == 0 || binding.DeviceID == 0 || binding.LineAssetID == 0 || binding.EndpointFamilyID == 0 || binding.BindingRevision == 0 || binding.LogicalDomain != t.logicalDomain {
+	if binding.Schema != bindingSchema || binding.TenantID == 0 || binding.DeviceID == 0 || binding.LineAssetID == 0 || binding.BindingRevision == 0 || binding.LogicalDomain != t.logicalDomain {
 		return bindingCurrent{}, E.New("rf ingress binding identity is invalid")
 	}
 	switch binding.Mode {

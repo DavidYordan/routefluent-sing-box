@@ -29,14 +29,14 @@ SING_ANYTLS_VERSION = "v0.0.11"
 SING_BOX_COMMIT = "af6e64c3b69e6132ebaee0e1a3d24e93903f6709"
 SING_ANYTLS_COMMIT = "130d2e61b8895727bfed4942c535e91b246a9603"
 REPO_ROOT = Path(__file__).resolve().parent
-PATCH_ID = "rf-dns-query-recipe-check-v1"
+PATCH_ID = "rf-device-binding-family-optional-v1"
 FEATURE_UPSTREAM_ANYTLS_CLIENT_METADATA = "upstream_anytls_client_metadata"
 FEATURE_RF_DNS_RESOLVER_GROUP = "rf_dns_resolver_group"
 FEATURE_RF_INGRESS_BINDING = "rf_ingress_binding"
 FEATURE_RF_DNS_CHECK_START_VALIDATION = "rf_dns_check_start_validation"
 FEATURE_RF_NATIVE_CURRENT = "rf_native_current_root_observation"
 FEATURE_RF_ROUTE_CONNECTIONS = "rf_native_route_connections"
-PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.7"
+PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.8"
 DEFAULT_TAGS = "with_utls with_clash_api"
 
 

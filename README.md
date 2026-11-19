@@ -16,8 +16,8 @@ RF 的受控制品构建仓库。它以固定的上游 sing-box 版本为基线�
 | --- | --- |
 | sing-box | `v1.14.2` / `af6e64c3b69e6132ebaee0e1a3d24e93903f6709` |
 | sing-anytls（上游依赖） | `v0.0.11` / `130d2e61b8895727bfed4942c535e91b246a9603` |
-| RF patch id | `rf-dns-query-recipe-check-v1` |
-| 版本名 | `1.14.2-rf-dns.7` |
+| RF patch id | `rf-device-binding-family-optional-v1` |
+| 版本名 | `1.14.2-rf-dns.8` |
 | 默认 build tags | `with_utls with_clash_api` |
 | 目标 | `linux/amd64`, `CGO_ENABLED=0` |
 
@@ -80,7 +80,7 @@ sing-box 1.13.16 起原生支持 AnyTLS `client_metadata`。RF 编译器只生�
 
 ### RF LineAsset 入口 binding
 
-`rf_ingress_binding` 是每个已部署 LineAsset 独立的 DNS-shaped transport。它读取 Agent 原子提交的单一 binding current：`resolver` 按可选 `query_name`（缺省为 logical domain）委托给资产既定 resolver，并把答案归还给原 logical domain；`explicit_ipv4` 只为该资产的 logical domain 返回当前一个 IPv4。没有 Provider 关联但存在别名配方时，transport 只执行静态 query-name 改写，不要求虚构 binding current。`binding_revision` 与 query name 进入 DNS cache environment；地址簿和历史候选不会进入 sing-box 配置，也不会形成 try-next。
+`rf_ingress_binding` 是每个已部署域名 LineAsset 独立的 DNS-shaped transport。设备上的 transport 读取 Agent 原子提交的单一 binding current：`resolver` 按可选 `query_name`（缺省为 logical domain）委托给资产既定 resolver，并把答案归还给原 logical domain；`explicit_ipv4` 只为该资产的 logical domain 返回当前一个 IPv4。binding 按 Tenant／Device／LineAsset 与 logical domain 标识，`endpoint_family_id` 是可空的公共知识关联，不决定本机消费。Server 私有 worker 和明确的 resolver 对照不引用设备 binding 文件，存在别名配方时仍执行静态 query-name 改写。`binding_revision` 与 query name 进入 DNS cache environment；地址簿和历史候选不会进入 sing-box 配置，也不会形成 try-next。
 
 ## 本地构建与验证
 
@@ -125,8 +125,8 @@ python3 scripts/rf_dns_runtime_smoke.py --sing-box ./dist/sing-box-linux-amd64
 当前 tag：
 
 ```bash
-git tag v1.14.2-rf-dns.7
-git push origin v1.14.2-rf-dns.7
+git tag v1.14.2-rf-dns.8
+git push origin v1.14.2-rf-dns.8
 ```
 
 发布资产：
@@ -140,7 +140,7 @@ git push origin v1.14.2-rf-dns.7
 发布制品模式：
 
 ```bash
-VERSION=v1.14.2-rf-dns.7
+VERSION=v1.14.2-rf-dns.8
 BASE=https://github.com/DavidYordan/routefluent-sing-box/releases/download/$VERSION
 
 curl -L -o sing-box-linux-amd64 "$BASE/sing-box-linux-amd64"
