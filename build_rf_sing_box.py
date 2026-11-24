@@ -29,14 +29,15 @@ SING_ANYTLS_VERSION = "v0.0.11"
 SING_BOX_COMMIT = "af6e64c3b69e6132ebaee0e1a3d24e93903f6709"
 SING_ANYTLS_COMMIT = "130d2e61b8895727bfed4942c535e91b246a9603"
 REPO_ROOT = Path(__file__).resolve().parent
-PATCH_ID = "rf-device-binding-family-optional-v1"
+PATCH_ID = "rf-native-business-activity-v1"
 FEATURE_UPSTREAM_ANYTLS_CLIENT_METADATA = "upstream_anytls_client_metadata"
 FEATURE_RF_DNS_RESOLVER_GROUP = "rf_dns_resolver_group"
 FEATURE_RF_INGRESS_BINDING = "rf_ingress_binding"
 FEATURE_RF_DNS_CHECK_START_VALIDATION = "rf_dns_check_start_validation"
 FEATURE_RF_NATIVE_CURRENT = "rf_native_current_root_observation"
 FEATURE_RF_ROUTE_CONNECTIONS = "rf_native_route_connections"
-PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.8"
+FEATURE_RF_ACTIVITY = "rf_native_business_activity"
+PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.9"
 DEFAULT_TAGS = "with_utls with_clash_api"
 
 
@@ -189,6 +190,8 @@ def patch_sing_box(source_dir: Path) -> None:
         "func NewManager(outbound adapter.OutboundManager) *Manager {\n\tepoch, epochErr := uuid.NewV4()\n\treturn &Manager{\n\t\trfTrafficEpochID: epoch.String(),\n\t\trfTrafficEpochError: epochErr,\n",
     )
     copy_patch_file(source_dir, "common/trafficcontrol/rf_epoch.go")
+    copy_patch_file(source_dir, "common/trafficcontrol/rf_activity.go")
+    copy_patch_file(source_dir, "common/trafficcontrol/rf_activity_test.go")
     replace_once(
         source_dir / "experimental/clashapi/connections.go",
         "\t\tif r.Header.Get(\"Upgrade\") != \"websocket\" {\n",
@@ -200,7 +203,7 @@ def patch_sing_box(source_dir: Path) -> None:
     replace_once(
         source_dir / "cmd" / "sing-box" / "cmd_run.go",
         "\t\truntimeDebug.FreeOSMemory()\n",
-        "\t\tcloseRFCurrentObserve := startRFCurrentObserve(options.RawMessage, instance.RFConnectionsSnapshot)\n\t\truntimeDebug.FreeOSMemory()\n",
+        "\t\tcloseRFCurrentObserve := startRFCurrentObserve(options.RawMessage, instance.RFConnectionsSnapshot, instance.RFActivitySnapshot)\n\t\truntimeDebug.FreeOSMemory()\n",
     )
     replace_once(
         source_dir / "cmd" / "sing-box" / "cmd_run.go",
@@ -303,6 +306,11 @@ def build(args: argparse.Namespace) -> None:
 
     go = require_tool("go")
     gofmt_files([
+        sing_box_dir / "common" / "trafficcontrol" / "rf_activity.go",
+        sing_box_dir / "common" / "trafficcontrol" / "rf_activity_test.go",
+        sing_box_dir / "rf_connections.go",
+        sing_box_dir / "cmd" / "sing-box" / "rf_current_linux.go",
+        sing_box_dir / "cmd" / "sing-box" / "rf_current_other.go",
         sing_box_dir / "option" / "options.go",
         sing_box_dir / "cmd" / "sing-box" / "cmd_check.go",
         sing_box_dir / "constant" / "dns.go",
@@ -340,6 +348,7 @@ def build(args: argparse.Namespace) -> None:
         "features": [
             FEATURE_RF_NATIVE_CURRENT,
             FEATURE_RF_ROUTE_CONNECTIONS,
+            FEATURE_RF_ACTIVITY,
             FEATURE_UPSTREAM_ANYTLS_CLIENT_METADATA,
             FEATURE_RF_DNS_RESOLVER_GROUP,
             FEATURE_RF_INGRESS_BINDING,

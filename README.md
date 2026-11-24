@@ -16,8 +16,8 @@ RF 的受控制品构建仓库。它以固定的上游 sing-box 版本为基线�
 | --- | --- |
 | sing-box | `v1.14.2` / `af6e64c3b69e6132ebaee0e1a3d24e93903f6709` |
 | sing-anytls（上游依赖） | `v0.0.11` / `130d2e61b8895727bfed4942c535e91b246a9603` |
-| RF patch id | `rf-device-binding-family-optional-v1` |
-| 版本名 | `1.14.2-rf-dns.8` |
+| RF patch id | `rf-native-business-activity-v1` |
+| 版本名 | `1.14.2-rf-dns.9` |
 | 默认 build tags | `with_utls with_clash_api` |
 | 目标 | `linux/amd64`, `CGO_ENABLED=0` |
 
@@ -38,6 +38,8 @@ Linux 的 `run --rf-observe-current` 在原生实例成功启动后，为自身 
 ### 整机流量计数
 
 Clash `GET /connections` 的 `X-Rf-Traffic-Epoch` 与累计总量来自同一个原生 traffic manager。其 UUID 在 manager 创建时生成，同一实例的请求保持，原生重载（包括同 PID、同配置）生成新值；不使用 PID、配置摘要或时间间隔猜测计数连续性。生成失败只令这次可选观察返回错误，不拒绝原生业务启动。
+
+同一root观察入口的`GET /v1/activity`返回`rf.native_activity.v1`：只包含本实例traffic manager的epoch及当前活跃流的ID、有序出站chain、upload／download累计值；不返回客户、目的地址、域名、规则或应用资料。PID／配置SHA仍来自该listener捕获的同一已加载实例；重载先关闭旧入口，新实例拥有新manager。关闭的流立即退出本投影，不读取原manager的关闭历史。Agent只以相同流／chain／epoch的连续计数形成路径传输增量，缺少基线仍为未知；传输字节不证明DNS、建连结果或应用成功。可选观察失败只拒绝本次读取，不改变业务服务。
 
 ### 上游 AnyTLS `client_metadata`
 
@@ -115,7 +117,7 @@ python3 scripts/rf_dns_runtime_smoke.py --sing-box ./dist/sing-box-linux-amd64
 版本输出必须包含：
 
 ```text
-1.14.2-rf-dns.7
+1.14.2-rf-dns.9
 ```
 
 ## GitHub Release
@@ -125,8 +127,8 @@ python3 scripts/rf_dns_runtime_smoke.py --sing-box ./dist/sing-box-linux-amd64
 当前 tag：
 
 ```bash
-git tag v1.14.2-rf-dns.8
-git push origin v1.14.2-rf-dns.8
+git tag v1.14.2-rf-dns.9
+git push origin v1.14.2-rf-dns.9
 ```
 
 发布资产：
@@ -140,7 +142,7 @@ git push origin v1.14.2-rf-dns.8
 发布制品模式：
 
 ```bash
-VERSION=v1.14.2-rf-dns.8
+VERSION=v1.14.2-rf-dns.9
 BASE=https://github.com/DavidYordan/routefluent-sing-box/releases/download/$VERSION
 
 curl -L -o sing-box-linux-amd64 "$BASE/sing-box-linux-amd64"

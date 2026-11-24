@@ -16,6 +16,7 @@ import (
 	"syscall"
 
 	"github.com/sagernet/sing-box/common/rfconnection"
+	"github.com/sagernet/sing-box/common/trafficcontrol"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing/service"
 )
@@ -37,7 +38,7 @@ func rfCurrentContext(ctx context.Context) context.Context {
 
 // Called only after this instance's native Start succeeds. Failure is an
 // observation error and never changes the already-running business instance.
-func startRFCurrentObserve(raw []byte, connections func() []rfconnection.Connection) func() {
+func startRFCurrentObserve(raw []byte, connections func() []rfconnection.Connection, activity func() (trafficcontrol.RFActivity, error)) func() {
 	if !rfObserveCurrent {
 		return func() {}
 	}
@@ -70,7 +71,7 @@ func startRFCurrentObserve(raw []byte, connections func() []rfconnection.Connect
 				http.Error(w, "root peer required", http.StatusForbidden)
 				return
 			}
-			if (r.URL.Path != "/v1/current" && r.URL.Path != "/v1/connections") || r.URL.RawQuery != "" {
+			if (r.URL.Path != "/v1/current" && r.URL.Path != "/v1/connections" && r.URL.Path != "/v1/activity") || r.URL.RawQuery != "" {
 				http.NotFound(w, r)
 				return
 			}
@@ -82,6 +83,15 @@ func startRFCurrentObserve(raw []byte, connections func() []rfconnection.Connect
 			w.Header().Set("Cache-Control", "no-store")
 			w.Header().Set("X-Rf-Native-Pid", strconv.Itoa(pid))
 			w.Header().Set("X-Rf-Config-Sha256", hex.EncodeToString(digest[:]))
+			if r.URL.Path == "/v1/activity" {
+				value, err := activity()
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(value)
+				return
+			}
 			if r.URL.Path == "/v1/connections" {
 				_ = json.NewEncoder(w).Encode(struct {
 					Schema      string                    `json:"schema"`
