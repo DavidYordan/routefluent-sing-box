@@ -29,7 +29,7 @@ SING_ANYTLS_VERSION = "v0.0.11"
 SING_BOX_COMMIT = "af6e64c3b69e6132ebaee0e1a3d24e93903f6709"
 SING_ANYTLS_COMMIT = "130d2e61b8895727bfed4942c535e91b246a9603"
 REPO_ROOT = Path(__file__).resolve().parent
-PATCH_ID = "rf-native-tls-session-cache-v1"
+PATCH_ID = "rf-native-actual-selection-v1"
 FEATURE_UPSTREAM_ANYTLS_CLIENT_METADATA = "upstream_anytls_client_metadata"
 FEATURE_RF_DNS_RESOLVER_GROUP = "rf_dns_resolver_group"
 FEATURE_RF_INGRESS_BINDING = "rf_ingress_binding"
@@ -37,7 +37,7 @@ FEATURE_RF_DNS_CHECK_START_VALIDATION = "rf_dns_check_start_validation"
 FEATURE_RF_NATIVE_CURRENT = "rf_native_current_root_observation"
 FEATURE_RF_ROUTE_CONNECTIONS = "rf_native_route_connections"
 FEATURE_RF_ACTIVITY = "rf_native_business_activity"
-PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.10"
+PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.11"
 DEFAULT_TAGS = "with_utls with_clash_api"
 
 
@@ -200,6 +200,62 @@ def patch_sing_box(source_dir: Path) -> None:
     copy_patch_file(source_dir, "common/trafficcontrol/rf_epoch.go")
     copy_patch_file(source_dir, "common/trafficcontrol/rf_activity.go")
     copy_patch_file(source_dir, "common/trafficcontrol/rf_activity_test.go")
+    copy_patch_file(source_dir, "common/trafficcontrol/rf_selection.go")
+    copy_patch_file(source_dir, "protocol/group/rf_selection_test.go")
+    replace_once(
+        source_dir / "common/trafficcontrol/tracker.go",
+        "type TrackerMetadata struct {\n",
+        "type TrackerMetadata struct {\n\trfSelection *rfSelection\n",
+    )
+    replace_once(
+        source_dir / "common/trafficcontrol/tracker.go",
+        "\treturn TrackerMetadata{\n",
+        "\treturn TrackerMetadata{\n\t\trfSelection: &rfSelection{},\n",
+    )
+    replace_once(
+        source_dir / "protocol/group/selector.go",
+        '\t"github.com/sagernet/sing-box/common/interrupt"\n',
+        '\t"github.com/sagernet/sing-box/common/interrupt"\n\t"github.com/sagernet/sing-box/common/trafficcontrol"\n',
+    )
+    replace_once(
+        source_dir / "protocol/group/selector.go",
+        "\tconn, err := s.selected.Load().DialContext(ctx, network, destination)\n",
+        "\tselected := s.selected.Load()\n\tconn, err := selected.DialContext(ctx, network, destination)\n",
+    )
+    replace_once(
+        source_dir / "protocol/group/selector.go",
+        "\treturn s.interruptGroup.NewConn(conn, interrupt.IsExternalConnectionFromContext(ctx)), nil\n",
+        "\treturn s.interruptGroup.NewConn(trafficcontrol.RFSelectedConnection(ctx, conn, s.Tag(), selected.Tag()), interrupt.IsExternalConnectionFromContext(ctx)), nil\n",
+    )
+    replace_once(
+        source_dir / "protocol/group/selector.go",
+        "\tconn, err := s.selected.Load().ListenPacket(ctx, destination)\n",
+        "\tselected := s.selected.Load()\n\tconn, err := selected.ListenPacket(ctx, destination)\n",
+    )
+    replace_once(
+        source_dir / "protocol/group/selector.go",
+        "\treturn s.interruptGroup.NewPacketConn(conn, interrupt.IsExternalConnectionFromContext(ctx)), nil\n",
+        "\treturn s.interruptGroup.NewPacketConn(trafficcontrol.RFSelectedPacketConnection(ctx, conn, s.Tag(), selected.Tag()), interrupt.IsExternalConnectionFromContext(ctx)), nil\n",
+    )
+    for handler in ("ConnectionHandler", "PacketConnectionHandler"):
+        replace_once(
+            source_dir / "protocol/group/selector.go",
+            f"\tif outboundHandler, isHandler := selected.(adapter.{handler}); isHandler {{\n",
+            f"\tif outboundHandler, isHandler := selected.(adapter.{handler}); isHandler {{\n\t\ttrafficcontrol.RFRecordSelectedHandler(conn, s.Tag(), selected.Tag())\n",
+        )
+    replace_once(
+        source_dir / "route/conn.go",
+        '\t"github.com/sagernet/sing-box/common/tlsspoof"\n',
+        '\t"github.com/sagernet/sing-box/common/tlsspoof"\n\t"github.com/sagernet/sing-box/common/trafficcontrol"\n',
+    )
+    for anchor in (
+        "\terr = N.ReportConnHandshakeSuccess(conn, remoteConn)\n",
+        "\t\tremotePacketConn = bufio.NewUnbindPacketConn(remoteConn)\n",
+        "\terr = N.ReportPacketConnHandshakeSuccess(conn, remotePacketConn)\n",
+    ):
+        indent = "\t\t" if anchor.startswith("\t\t") else "\t"
+        remote = "remotePacketConn" if "ReportPacket" in anchor else "remoteConn"
+        replace_once(source_dir / "route/conn.go", anchor, indent + f"trafficcontrol.RFBindSelectedConnection(conn, {remote})\n" + anchor)
     replace_once(
         source_dir / "experimental/clashapi/connections.go",
         "\t\tif r.Header.Get(\"Upgrade\") != \"websocket\" {\n",
@@ -318,6 +374,11 @@ def build(args: argparse.Namespace) -> None:
         sing_box_dir / "common" / "tls" / "rf_client_session_test.go",
         sing_box_dir / "common" / "trafficcontrol" / "rf_activity.go",
         sing_box_dir / "common" / "trafficcontrol" / "rf_activity_test.go",
+        sing_box_dir / "common" / "trafficcontrol" / "rf_selection.go",
+        sing_box_dir / "common" / "trafficcontrol" / "tracker.go",
+        sing_box_dir / "protocol" / "group" / "selector.go",
+        sing_box_dir / "protocol" / "group" / "rf_selection_test.go",
+        sing_box_dir / "route" / "conn.go",
         sing_box_dir / "rf_connections.go",
         sing_box_dir / "cmd" / "sing-box" / "rf_current_linux.go",
         sing_box_dir / "cmd" / "sing-box" / "rf_current_other.go",

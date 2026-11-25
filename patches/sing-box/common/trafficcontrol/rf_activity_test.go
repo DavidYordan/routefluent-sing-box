@@ -3,6 +3,7 @@ package trafficcontrol
 import (
 	"encoding/json"
 	"github.com/gofrs/uuid/v5"
+	"net"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -13,9 +14,43 @@ type rfActivityTracker struct{ value TrackerMetadata }
 func (t *rfActivityTracker) Metadata() *TrackerMetadata { return &t.value }
 func (t *rfActivityTracker) Close() error               { return nil }
 
+func TestRFSelectedLeavesUnobservedSocketsWithNativeOwner(t *testing.T) {
+	left, right := net.Pipe()
+	defer left.Close()
+	defer right.Close()
+	if got := RFSelectedConnection(t.Context(), left, "group", "selected"); got != left {
+		t.Fatal("an unobserved native instance acquired an observation wrapper")
+	}
+	packet, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer packet.Close()
+	if got := RFSelectedPacketConnection(t.Context(), packet, "group", "selected"); got != packet {
+		t.Fatal("an unobserved native packet socket acquired an observation wrapper")
+	}
+}
+
+func TestRFActivityDoesNotClaimBeforeDialSelection(t *testing.T) {
+	m := NewManager(nil)
+	tracker := &rfActivityTracker{value: TrackerMetadata{ID: uuid.Must(uuid.NewV4()), Chain: []string{"route-selector", "selection-before-dial"}, Upload: new(atomic.Int64), Download: new(atomic.Int64)}}
+	tracker.value.Upload.Store(100)
+	tracker.value.Download.Store(200)
+	m.connections.Store(tracker.value.ID, tracker)
+	observed, err := m.RFActivitySnapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(observed.Flows) != 1 || len(observed.Flows[0].Chain) != 0 || observed.Flows[0].Upload != 100 || observed.Flows[0].Download != 200 {
+		t.Fatalf("before-dial selection became actual transport attribution: %#v", observed)
+	}
+}
+
 func TestRFActivityKeepsLiveManagerIdentityAndNoDestinations(t *testing.T) {
 	m := NewManager(nil)
 	tracker := &rfActivityTracker{value: TrackerMetadata{ID: uuid.Must(uuid.NewV4()), Chain: []string{"route-selector", "selected-target"}, Upload: new(atomic.Int64), Download: new(atomic.Int64)}}
+	tracker.value.rfSelection = &rfSelection{}
+	tracker.value.rfSelection.store([]string{"route-selector", "selected-target"})
 	tracker.value.Metadata.Domain = "private-customer-destination.invalid"
 	tracker.value.Upload.Store(100)
 	tracker.value.Download.Store(200)

@@ -1,10 +1,6 @@
 package trafficcontrol
 
-import (
-	"slices"
-
-	C "github.com/sagernet/sing-box/constant"
-)
+import C "github.com/sagernet/sing-box/constant"
 
 // RFActivity contains no client, destination, rule or application metadata.
 // The same manager owns its epoch and currently live transport counters.
@@ -31,7 +27,7 @@ func (m *Manager) RFActivitySnapshot() (RFActivity, error) {
 		if flow.OutboundType == C.TypeDNS {
 			continue
 		}
-		result.Flows = append(result.Flows, RFActivityFlow{ID: flow.ID.String(), Chain: slices.Clone(flow.Chain), Upload: flow.Upload.Load(), Download: flow.Download.Load()})
+		result.Flows = append(result.Flows, RFActivityFlow{ID: flow.ID.String(), Chain: flow.rfSelection.snapshot(), Upload: flow.Upload.Load(), Download: flow.Download.Load()})
 	}
 	return result, nil
 }

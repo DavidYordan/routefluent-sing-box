@@ -16,8 +16,8 @@ RF 的受控制品构建仓库。它以固定的上游 sing-box 版本为基线�
 | --- | --- |
 | sing-box | `v1.14.2` / `af6e64c3b69e6132ebaee0e1a3d24e93903f6709` |
 | sing-anytls（上游依赖） | `v0.0.11` / `130d2e61b8895727bfed4942c535e91b246a9603` |
-| RF patch id | `rf-native-tls-session-cache-v1` |
-| 版本名 | `1.14.2-rf-dns.10` |
+| RF patch id | `rf-native-actual-selection-v1` |
+| 版本名 | `1.14.2-rf-dns.11` |
 | 默认 build tags | `with_utls with_clash_api` |
 | 目标 | `linux/amd64`, `CGO_ENABLED=0` |
 
@@ -44,6 +44,8 @@ Linux 的 `run --rf-observe-current` 在原生实例成功启动后，为自身 
 Clash `GET /connections` 的 `X-Rf-Traffic-Epoch` 与累计总量来自同一个原生 traffic manager。其 UUID 在 manager 创建时生成，同一实例的请求保持，原生重载（包括同 PID、同配置）生成新值；不使用 PID、配置摘要或时间间隔猜测计数连续性。生成失败只令这次可选观察返回错误，不拒绝原生业务启动。
 
 同一root观察入口的`GET /v1/activity`返回`rf.native_activity.v1`：只包含本实例traffic manager的epoch及当前活跃流的ID、有序出站chain、upload／download累计值；不返回客户、目的地址、域名、规则或应用资料。PID／配置SHA仍来自该listener捕获的同一已加载实例；重载先关闭旧入口，新实例拥有新manager。关闭的流立即退出本投影，不读取原manager的关闭历史。Agent只以相同流／chain／epoch的连续计数形成路径传输增量，缺少基线仍为未知；传输字节不证明DNS、建连结果或应用成功。可选观察失败只拒绝本次读取，不改变业务服务。
+
+该chain沿原生消费者实际采用的连接取得：selector只记录本次已持有的选择，TCP／UDP拨号结果随返回socket携带，connection manager消费实际获选socket后绑定到同一活跃流；handler直接分派则记录实际调用对象。拨号前traffic tracker的`Chain`和后来selector的`Now()`均不填补实际来源。未取得来源的流保留计数、chain为空，Agent将其计入不可归属；不补造路径成功，不影响转发。引用只随连接存在，不新增目的历史、轮询或持久状态；原缓冲／packet接口及可解包能力继续转交原生连接。没有启用原root观察入口的实例继续使用原socket，不为该观察包装连接。
 
 ### 上游 AnyTLS `client_metadata`
 
