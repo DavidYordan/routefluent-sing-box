@@ -16,8 +16,8 @@ RF 的受控制品构建仓库。它以固定的上游 sing-box 版本为基线�
 | --- | --- |
 | sing-box | `v1.14.2` / `af6e64c3b69e6132ebaee0e1a3d24e93903f6709` |
 | sing-anytls（上游依赖） | `v0.0.11` / `130d2e61b8895727bfed4942c535e91b246a9603` |
-| RF patch id | `rf-native-actual-selection-v1` |
-| 版本名 | `1.14.2-rf-dns.11` |
+| RF patch id | `rf-native-socks5-connect-v1` |
+| 版本名 | `1.14.2-rf-dns.12` |
 | 默认 build tags | `with_utls with_clash_api` |
 | 目标 | `linux/amd64`, `CGO_ENABLED=0` |
 
@@ -46,6 +46,10 @@ Clash `GET /connections` 的 `X-Rf-Traffic-Epoch` 与累计总量来自同一个
 同一root观察入口的`GET /v1/activity`返回`rf.native_activity.v1`：只包含本实例traffic manager的epoch及当前活跃流的ID、有序出站chain、upload／download累计值；不返回客户、目的地址、域名、规则或应用资料。PID／配置SHA仍来自该listener捕获的同一已加载实例；重载先关闭旧入口，新实例拥有新manager。关闭的流立即退出本投影，不读取原manager的关闭历史。Agent只以相同流／chain／epoch的连续计数形成路径传输增量，缺少基线仍为未知；传输字节不证明DNS、建连结果或应用成功。可选观察失败只拒绝本次读取，不改变业务服务。
 
 该chain沿原生消费者实际采用的连接取得：selector只记录本次已持有的选择，TCP／UDP拨号结果随返回socket携带，connection manager消费实际获选socket后绑定到同一活跃流；handler直接分派则记录实际调用对象。拨号前traffic tracker的`Chain`和后来selector的`Now()`均不填补实际来源。未取得来源的流保留计数、chain为空，Agent将其计入不可归属；不补造路径成功，不影响转发。引用只随连接存在，不新增目的历史、轮询或持久状态；原缓冲／packet接口及可解包能力继续转交原生连接。没有启用原root观察入口的实例继续使用原socket，不为该观察包装连接。
+
+同一root入口的`GET /v1/connect-results`返回`rf.native_connect_results.v1`，响应PID／配置SHA与当前实例保持同一来源，epoch复用本实例traffic manager。仅SOCKS5 TCP客户端的实际返回产生结果：成功返回已经消费远端CONNECT应答；失败保留原生错误，本端取消单独计数。selector在进入本次实际选中对象时捕获不可变来源，失败也不从后来选择补归属。没有原root观察上下文或属于DNS transport的调用不生成业务结果。
+
+该实例只按已观察的配置选择／出站保留累计接受、失败和取消数，以及最近有效结果、最近失败与取消；取消不替换有效结果，成功不删除原失败。连接关闭不删除这些聚合，原实例退出即释放，新实例不继承；没有目的／终端键、逐流历史、额外拨号或轮询。原始错误只在root明细，本机Agent投影不复制目的和错误字符串；不同实际来源即使落到同一业务行／方案也分别保留。CONNECT应答不表示HTTP或客户应用成功，不改变原始转发、取消、期限或认证结果。
 
 ### 上游 AnyTLS `client_metadata`
 

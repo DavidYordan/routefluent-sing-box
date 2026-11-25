@@ -22,3 +22,16 @@ func (s *Box) RFActivitySnapshot() (trafficcontrol.RFActivity, error) {
 	}
 	return manager.RFActivitySnapshot()
 }
+
+func (s *Box) RFConnectResultsSnapshot() (rfconnection.ConnectResults, error) {
+	manager := service.PtrFromContext[trafficcontrol.Manager](s.ctx)
+	observer := service.FromContext[*rfconnection.Observer](s.ctx)
+	if manager == nil || observer == nil {
+		return rfconnection.ConnectResults{}, fmt.Errorf("native connection results owner is unavailable")
+	}
+	epoch, err := manager.RFTrafficEpoch()
+	if err != nil {
+		return rfconnection.ConnectResults{}, err
+	}
+	return observer.ConnectSnapshot(epoch), nil
+}

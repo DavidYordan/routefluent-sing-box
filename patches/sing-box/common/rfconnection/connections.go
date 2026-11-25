@@ -26,14 +26,17 @@ type peer struct {
 	port uint16
 }
 
-// Observer belongs to one native instance. Its keys exist only while that
-// instance owns sockets, including shared/multiplexed upstream connections.
+// Observer belongs to one native instance. Peers follow owned sockets;
+// configured CONNECT selections retain only their aggregate completion facts.
 type Observer struct {
-	mu    sync.Mutex
-	peers map[peer]int
+	mu       sync.Mutex
+	peers    map[peer]int
+	connects map[string]*ConnectResult
 }
 
-func New() *Observer { return &Observer{peers: make(map[peer]int)} }
+func New() *Observer {
+	return &Observer{peers: make(map[peer]int), connects: make(map[string]*ConnectResult)}
+}
 
 func (o *Observer) Track(ctx context.Context, conn net.Conn) net.Conn {
 	metadata := adapter.ContextFrom(ctx)

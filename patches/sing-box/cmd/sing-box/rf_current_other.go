@@ -10,6 +10,6 @@ import (
 
 func rfCurrentContext(ctx context.Context) context.Context { return ctx }
 
-func startRFCurrentObserve([]byte, func() []rfconnection.Connection, func() (trafficcontrol.RFActivity, error)) func() {
+func startRFCurrentObserve([]byte, func() []rfconnection.Connection, func() (trafficcontrol.RFActivity, error), func() (rfconnection.ConnectResults, error)) func() {
 	return func() {}
 }
