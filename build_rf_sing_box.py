@@ -29,7 +29,7 @@ SING_ANYTLS_VERSION = "v0.0.11"
 SING_BOX_COMMIT = "af6e64c3b69e6132ebaee0e1a3d24e93903f6709"
 SING_ANYTLS_COMMIT = "130d2e61b8895727bfed4942c535e91b246a9603"
 REPO_ROOT = Path(__file__).resolve().parent
-PATCH_ID = "rf-doh-request-scope-v1"
+PATCH_ID = "rf-doh-request-scope-v2"
 FEATURE_UPSTREAM_ANYTLS_CLIENT_METADATA = "upstream_anytls_client_metadata"
 FEATURE_RF_DNS_RESOLVER_GROUP = "rf_dns_resolver_group"
 FEATURE_RF_INGRESS_BINDING = "rf_ingress_binding"
@@ -39,7 +39,7 @@ FEATURE_RF_ROUTE_CONNECTIONS = "rf_native_route_connections"
 FEATURE_RF_ACTIVITY = "rf_native_business_activity"
 FEATURE_RF_CONNECT_RESULTS = "rf_native_socks5_connect_results"
 FEATURE_RF_DOH_REQUEST_SCOPE = "rf_doh_request_scope"
-PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.13"
+PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.14"
 DEFAULT_TAGS = "with_utls with_clash_api"
 
 
@@ -351,6 +351,7 @@ def patch_sing_box(source_dir: Path) -> None:
     )
     copy_patch_file(source_dir, "dns/transport/rfgroup/rfgroup.go")
     copy_patch_file(source_dir, "dns/transport/rf_https_request_test.go")
+    copy_patch_file(source_dir, "dns/transport/rf_https_http1_test.go")
     copy_patch_file(source_dir, "dns/transport/rf_https_lifetime.go")
     # One DoH request owns its stream. A deadline does not prove that the
     # shared HTTP transport or concurrent queries need recovery/reset.
@@ -413,6 +414,12 @@ def patch_sing_box(source_dir: Path) -> None:
         "\tcurrentTransport := t.transport\n\tt.transportAccess.Unlock()\n\tif currentTransport == nil {\n\t\treturn nil, net.ErrClosed\n\t}\n",
     )
     wrapper = source_dir / "dns/transport/https_transport.go"
+    replace_once(
+        wrapper,
+        "func (h *HTTPSTransportWrapper) RoundTrip(request *http.Request) (*http.Response, error) {\n",
+        "func (h *HTTPSTransportWrapper) RoundTrip(request *http.Request) (*http.Response, error) {\n"
+        "\trequest = request.WithContext(context.WithValue(request.Context(), httpsDialOwnerKey{}, request.Context()))\n",
+    )
     replace_once(wrapper, "\tclosed         bool\n", "\tclosed         bool\n\tdialCancels    map[*context.CancelFunc]struct{}\n")
     replace_once(wrapper, "\t\tconnections: make(map[*httpsTrackedConn]struct{}),\n", "\t\tconnections: make(map[*httpsTrackedConn]struct{}),\n\t\tdialCancels: make(map[*context.CancelFunc]struct{}),\n")
     replace_once(
@@ -511,6 +518,7 @@ def build(args: argparse.Namespace) -> None:
         sing_box_dir / "dns" / "transport" / "https_transport.go",
         sing_box_dir / "dns" / "transport" / "rf_https_lifetime.go",
         sing_box_dir / "dns" / "transport" / "rf_https_request_test.go",
+        sing_box_dir / "dns" / "transport" / "rf_https_http1_test.go",
         sing_box_dir / "dns" / "transport" / "rfbinding" / "rfbinding.go",
         sing_box_dir / "dns" / "transport" / "rfbinding" / "rfbinding_test.go",
         sing_box_dir / "dns" / "transport" / "rfgroup" / "rfgroup.go",

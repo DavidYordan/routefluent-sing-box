@@ -16,8 +16,8 @@ RF 的受控制品构建仓库。它以固定的上游 sing-box 版本为基线�
 | --- | --- |
 | sing-box | `v1.14.2` / `af6e64c3b69e6132ebaee0e1a3d24e93903f6709` |
 | sing-anytls（上游依赖） | `v0.0.11` / `130d2e61b8895727bfed4942c535e91b246a9603` |
-| RF patch id | `rf-doh-request-scope-v1` |
-| 版本名 | `1.14.2-rf-dns.13` |
+| RF patch id | `rf-doh-request-scope-v2` |
+| 版本名 | `1.14.2-rf-dns.14` |
 | 默认 build tags | `with_utls with_clash_api` |
 | 目标 | `linux/amd64`, `CGO_ENABLED=0` |
 
@@ -26,6 +26,8 @@ RF 的受控制品构建仓库。它以固定的上游 sing-box 版本为基线�
 ### DoH请求隔离
 
 单个DoH查询的deadline只结束该请求及HTTP/2 stream，保留同一HTTPS连接上的其它查询及正常后续复用；不因一次超时重建共享transport，也不保存失败计数或上游健康资格。明确的native Reset替换活跃transport，关闭旧实例的连接及未完成拨号；Close则清空唯一current，结束所拥有的拨号和连接，后续查询返回`net.ErrClosed`，Reset也不能重新启用已关闭对象。真实TLS／HTTP/2消费者覆盖一个超时与健康并发查询、后续DNS回答及明确重置，HTTP/1.1／HTTP/2消费者另覆盖关闭时仍在进行的物理拨号。
+
+HTTP/1.1的未完成物理拨号由原查询context持有；原查询取消或到期即结束该拨号，transport自身取消仍有效。查询元数据继续传给原生dialer，其它请求及健康连接各自保留自己的生命周期。真实HTTP transport覆盖取消与到期，TLS／HTTP/1.1消费者覆盖健康并发查询、原context元数据及其连接后续复用。
 
 ### 普通TLS会话复用
 
