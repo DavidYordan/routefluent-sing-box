@@ -351,6 +351,7 @@ def patch_sing_box(source_dir: Path) -> None:
     )
     copy_patch_file(source_dir, "dns/transport/rfgroup/rfgroup.go")
     copy_patch_file(source_dir, "dns/transport/rf_https_request_test.go")
+    copy_patch_file(source_dir, "dns/transport/rf_https_lifetime.go")
     # One DoH request owns its stream. A deadline does not prove that the
     # shared HTTP transport or concurrent queries need recovery/reset.
     https_transport = source_dir / "dns/transport/https.go"
@@ -381,6 +382,82 @@ def patch_sing_box(source_dir: Path) -> None:
 	return t.exchange(ctx, message)
 }
 """,
+    )
+    replace_once(
+        https_transport,
+        """func (t *HTTPSTransport) Close() error {
+	t.Reset()
+	return nil
+}
+""",
+        """func (t *HTTPSTransport) Close() error {
+	t.transportAccess.Lock()
+	current := t.transport
+	t.transport = nil
+	t.transportAccess.Unlock()
+	if current != nil {
+		current.Close()
+	}
+	return nil
+}
+""",
+    )
+    replace_once(
+        https_transport,
+        "\tdefer t.transportAccess.Unlock()\n\tt.resetTransportLocked()\n",
+        "\tdefer t.transportAccess.Unlock()\n\tif t.transport != nil {\n\t\tt.resetTransportLocked()\n\t}\n",
+    )
+    replace_once(
+        https_transport,
+        "\tcurrentTransport := t.transport\n\tt.transportAccess.Unlock()\n",
+        "\tcurrentTransport := t.transport\n\tt.transportAccess.Unlock()\n\tif currentTransport == nil {\n\t\treturn nil, net.ErrClosed\n\t}\n",
+    )
+    wrapper = source_dir / "dns/transport/https_transport.go"
+    replace_once(wrapper, "\tclosed         bool\n", "\tclosed         bool\n\tdialCancels    map[*context.CancelFunc]struct{}\n")
+    replace_once(wrapper, "\t\tconnections: make(map[*httpsTrackedConn]struct{}),\n", "\t\tconnections: make(map[*httpsTrackedConn]struct{}),\n\t\tdialCancels: make(map[*context.CancelFunc]struct{}),\n")
+    replace_once(
+        wrapper,
+        """		DialTLSContext: func(ctx context.Context, _, _ string, _ *tls.STDConfig) (net.Conn, error) {
+			resultConn, err := dialer.DialContext(ctx, N.NetworkTCP, serverAddr)
+			if err != nil {
+				return nil, err
+			}
+			if tlsConn, isTLSConn := resultConn.(tls.Conn); isTLSConn {
+				state := tlsConn.ConnectionState()
+				if state.NegotiatedProtocol != http2.NextProtoTLS {
+					tlsConn.Close()
+					fallback.Store(true)
+					return nil, errFallback
+				}
+			}
+			return wrapper.trackConn(resultConn)
+		},
+""",
+        """		DialTLSContext: func(ctx context.Context, _, _ string, _ *tls.STDConfig) (net.Conn, error) {
+			return wrapper.dial(ctx, dialer, serverAddr, true)
+		},
+""",
+    )
+    for signature in (
+        "DialContext: func(ctx context.Context, _, addr string)",
+        "DialTLSContext: func(ctx context.Context, _, _ string)",
+    ):
+        replace_once(
+            wrapper,
+            f"\t\t{signature} (net.Conn, error) {{\n"
+            "\t\t\tresultConn, err := dialer.DialContext(ctx, N.NetworkTCP, serverAddr)\n"
+            "\t\t\tif err != nil {\n\t\t\t\treturn nil, err\n\t\t\t}\n"
+            "\t\t\treturn wrapper.trackConn(resultConn)\n\t\t},\n",
+            f"\t\t{signature} (net.Conn, error) {{\n"
+            "\t\t\treturn wrapper.dial(ctx, dialer, serverAddr, false)\n\t\t},\n",
+        )
+    replace_once(
+        wrapper,
+        "\th.connections = nil\n\th.connAccess.Unlock()\n",
+        "\tdials := make([]context.CancelFunc, 0, len(h.dialCancels))\n"
+        "\tfor cancel := range h.dialCancels {\n\t\tdials = append(dials, *cancel)\n\t}\n"
+        "\th.connections = nil\n\th.dialCancels = nil\n\th.connAccess.Unlock()\n"
+        "\tfor _, cancel := range dials {\n\t\tcancel()\n\t}\n",
     )
     copy_patch_file(source_dir, "dns/transport/rfgroup/rfgroup_test.go")
     copy_patch_file(source_dir, "dns/transport/rfgroup/request_scope_test.go")
@@ -431,6 +508,8 @@ def build(args: argparse.Namespace) -> None:
         sing_box_dir / "cmd" / "sing-box" / "cmd_check.go",
         sing_box_dir / "constant" / "dns.go",
         sing_box_dir / "dns" / "transport" / "https.go",
+        sing_box_dir / "dns" / "transport" / "https_transport.go",
+        sing_box_dir / "dns" / "transport" / "rf_https_lifetime.go",
         sing_box_dir / "dns" / "transport" / "rf_https_request_test.go",
         sing_box_dir / "dns" / "transport" / "rfbinding" / "rfbinding.go",
         sing_box_dir / "dns" / "transport" / "rfbinding" / "rfbinding_test.go",

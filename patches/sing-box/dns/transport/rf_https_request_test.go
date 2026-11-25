@@ -181,3 +181,96 @@ func TestRFHTTPSExplicitResetStillClosesItsConnections(t *testing.T) {
 		t.Fatalf("explicit reset did not use a new TLS connection: %d", connections.opened.Load())
 	}
 }
+
+func TestRFHTTPSCloseCannotAcceptAnotherQuery(t *testing.T) {
+	transport, connections := rfHTTPSFixture(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if request := rfHTTPSQuestion(t, r); request != nil {
+			rfHTTPSReply(t, w, request)
+		}
+	}))
+	if err := transport.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// An environment callback after retirement cannot revive this owner.
+	transport.Reset()
+	request := new(mDNS.Msg)
+	request.SetQuestion("closed.example.", mDNS.TypeA)
+	_, err := transport.Exchange(t.Context(), request)
+	if !errors.Is(err, net.ErrClosed) || connections.opened.Load() != 0 {
+		t.Fatalf("closed native DoH accepted work: error=%v physical TLS connections=%d", err, connections.opened.Load())
+	}
+}
+
+type rfHTTPSBlockingDialer struct {
+	started, stopped, release chan struct{}
+	startOnce, stopOnce       sync.Once
+	calls                     atomic.Int32
+}
+
+func (d *rfHTTPSBlockingDialer) DialContext(ctx context.Context, _ string, _ M.Socksaddr) (net.Conn, error) {
+	d.calls.Add(1)
+	d.startOnce.Do(func() { close(d.started) })
+	select {
+	case <-ctx.Done():
+		d.stopOnce.Do(func() { close(d.stopped) })
+		return nil, ctx.Err()
+	case <-d.release:
+		return nil, errors.New("fixture dial released")
+	}
+}
+
+func (d *rfHTTPSBlockingDialer) ListenPacket(context.Context, M.Socksaddr) (net.PacketConn, error) {
+	return nil, errors.New("this HTTPS fixture has no packet listener")
+}
+
+func TestRFHTTPSCloseEndsPendingPhysicalDial(t *testing.T) {
+	for _, http1 := range []bool{false, true} {
+		name := "HTTP2"
+		if http1 {
+			name = "HTTP1"
+		}
+		t.Run(name, func(t *testing.T) {
+			dialer := &rfHTTPSBlockingDialer{started: make(chan struct{}), stopped: make(chan struct{}), release: make(chan struct{})}
+			fallback := new(atomic.Bool)
+			fallback.Store(http1)
+			wrapper := NewHTTPSTransportWrapper(dialer, M.ParseSocksaddr("fixture.example:443"), fallback)
+			ctx, cancel := context.WithCancel(t.Context())
+			request, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://fixture.example/dns-query", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			done := make(chan error, 1)
+			go func() { _, err := wrapper.RoundTrip(request); done <- err }()
+			t.Cleanup(func() {
+				cancel()
+				close(dialer.release)
+				wrapper.Close()
+			})
+			<-dialer.started
+			wrapper.Close()
+			select {
+			case <-dialer.stopped:
+			case <-time.After(time.Second):
+				t.Fatal("physical dial outlived the native DoH transport Close")
+			}
+			if err := <-done; err == nil {
+				t.Fatal("retired native transport returned empty success")
+			}
+		})
+	}
+}
+
+func TestRFHTTPSClosedWrapperRejectsBeforePhysicalDial(t *testing.T) {
+	dialer := &rfHTTPSBlockingDialer{started: make(chan struct{}), stopped: make(chan struct{}), release: make(chan struct{})}
+	close(dialer.release)
+	wrapper := NewHTTPSTransportWrapper(dialer, M.ParseSocksaddr("fixture.example:443"), new(atomic.Bool))
+	wrapper.Close()
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "https://fixture.example/dns-query", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = wrapper.RoundTrip(request)
+	if !errors.Is(err, net.ErrClosed) || dialer.calls.Load() != 0 {
+		t.Fatalf("closed wrapper entered physical dialing: error=%v dials=%d", err, dialer.calls.Load())
+	}
+}

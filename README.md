@@ -25,7 +25,7 @@ RF 的受控制品构建仓库。它以固定的上游 sing-box 版本为基线�
 
 ### DoH请求隔离
 
-单个DoH查询的deadline只结束该请求及HTTP/2 stream，保留同一HTTPS连接上的其它查询及正常后续复用；不因一次超时重建共享transport，也不保存失败计数或上游健康资格。明确的native Reset／Close仍关闭自身transport和连接，后续请求消费该次新实例。真实TLS／HTTP/2消费者覆盖一个超时与健康并发查询、后续DNS回答及明确重置。
+单个DoH查询的deadline只结束该请求及HTTP/2 stream，保留同一HTTPS连接上的其它查询及正常后续复用；不因一次超时重建共享transport，也不保存失败计数或上游健康资格。明确的native Reset替换活跃transport，关闭旧实例的连接及未完成拨号；Close则清空唯一current，结束所拥有的拨号和连接，后续查询返回`net.ErrClosed`，Reset也不能重新启用已关闭对象。真实TLS／HTTP/2消费者覆盖一个超时与健康并发查询、后续DNS回答及明确重置，HTTP/1.1／HTTP/2消费者另覆盖关闭时仍在进行的物理拨号。
 
 ### 普通TLS会话复用
 
