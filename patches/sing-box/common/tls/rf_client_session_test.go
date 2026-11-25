@@ -42,6 +42,11 @@ func (conn *rfTLSCountConn) Write(p []byte) (int, error) {
 }
 
 func TestRFSTDClientResumesWithinConfigAndKeepsTrustIsolated(t *testing.T) {
+	rfTestClientSession(t, NewSTDClient, func(uint16) bool { return true })
+}
+
+func rfTestClientSession(t *testing.T, constructor func(context.Context, logger.ContextLogger, string, option.OutboundTLSOptions) (Config, error), supportsResumption func(uint16) bool) {
+	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -78,7 +83,7 @@ func TestRFSTDClientResumesWithinConfigAndKeepsTrustIsolated(t *testing.T) {
 				if trusted {
 					options.Certificate = []string{certificatePEM}
 				}
-				config, err := NewSTDClient(t.Context(), logger.NOP(), "example.com", options)
+				config, err := constructor(t.Context(), logger.NOP(), "example.com", options)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -124,11 +129,11 @@ func TestRFSTDClientResumesWithinConfigAndKeepsTrustIsolated(t *testing.T) {
 					t.Fatalf("response changed: %q, %v, %v", body, readErr, closeErr)
 				}
 				observed := <-results
-				if observed.resumed != (index == 1) || observed.request != requestID {
+				if observed.resumed != (index == 1 && supportsResumption(version.code)) || observed.request != requestID {
 					t.Errorf("request %d: resumed=%t, request=%s", index, observed.resumed, observed.request)
 				}
 			}
-			if costs[1] >= costs[0] {
+			if supportsResumption(version.code) && costs[1] >= costs[0] {
 				t.Errorf("resumed connection repeated full TLS bytes: full=%d resumed=%d", costs[0], costs[1])
 			}
 			t.Logf("RF_NATIVE_TLS version=%s full=%d reused=%d independent=%d; TLS+HTTP socket bytes, excludes IP/ACK/proxy and daily coverage", version.name, costs[0], costs[1], costs[2])

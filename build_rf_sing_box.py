@@ -29,7 +29,7 @@ SING_ANYTLS_VERSION = "v0.0.11"
 SING_BOX_COMMIT = "af6e64c3b69e6132ebaee0e1a3d24e93903f6709"
 SING_ANYTLS_COMMIT = "130d2e61b8895727bfed4942c535e91b246a9603"
 REPO_ROOT = Path(__file__).resolve().parent
-PATCH_ID = "rf-doh-request-scope-v2"
+PATCH_ID = "rf-utls-session-v1"
 FEATURE_UPSTREAM_ANYTLS_CLIENT_METADATA = "upstream_anytls_client_metadata"
 FEATURE_RF_DNS_RESOLVER_GROUP = "rf_dns_resolver_group"
 FEATURE_RF_INGRESS_BINDING = "rf_ingress_binding"
@@ -39,7 +39,7 @@ FEATURE_RF_ROUTE_CONNECTIONS = "rf_native_route_connections"
 FEATURE_RF_ACTIVITY = "rf_native_business_activity"
 FEATURE_RF_CONNECT_RESULTS = "rf_native_socks5_connect_results"
 FEATURE_RF_DOH_REQUEST_SCOPE = "rf_doh_request_scope"
-PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.14"
+PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.15"
 DEFAULT_TAGS = "with_utls with_clash_api"
 
 
@@ -182,6 +182,12 @@ def patch_sing_box(source_dir: Path) -> None:
         "\tvar tlsConfig tls.Config\n\ttlsConfig.ClientSessionCache = tls.NewLRUClientSessionCache(0)\n",
     )
     copy_patch_file(source_dir, "common/tls/rf_client_session_test.go")
+    replace_once(
+        source_dir / "common/tls/utls_client.go",
+        "\tvar tlsConfig utls.Config\n",
+        "\tvar tlsConfig utls.Config\n\tif options.Reality == nil || !options.Reality.Enabled {\n\t\ttlsConfig.ClientSessionCache = utls.NewLRUClientSessionCache(0)\n\t}\n",
+    )
+    copy_patch_file(source_dir, "common/tls/rf_utls_session_test.go")
     # Passive compiler-owned connection references travel with the actual
     # loaded bytes. Native routing never consumes or qualifies them.
     replace_once(
@@ -500,7 +506,9 @@ def build(args: argparse.Namespace) -> None:
     go = require_tool("go")
     gofmt_files([
         sing_box_dir / "common" / "tls" / "std_client.go",
+        sing_box_dir / "common" / "tls" / "utls_client.go",
         sing_box_dir / "common" / "tls" / "rf_client_session_test.go",
+        sing_box_dir / "common" / "tls" / "rf_utls_session_test.go",
         sing_box_dir / "common" / "trafficcontrol" / "rf_activity.go",
         sing_box_dir / "common" / "trafficcontrol" / "rf_activity_test.go",
         sing_box_dir / "common" / "trafficcontrol" / "rf_selection.go",
