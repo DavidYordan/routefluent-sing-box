@@ -27,7 +27,7 @@ jobs:
 
       - name: Request scope regressions
         working-directory: work/src/sing-box-1.14.2
-        run: go test ./dns/transport/rfgroup ./dns/transport/rfbinding
+        run: go test ./dns/transport ./dns/transport/rfgroup ./dns/transport/rfbinding
 
       - name: Smoke check
         run: |

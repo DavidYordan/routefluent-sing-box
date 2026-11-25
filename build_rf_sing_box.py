@@ -3,7 +3,7 @@
 
 Upstream sing-box 1.13.16 and later owns AnyTLS ``client_metadata``.  The
 RF patch is therefore limited to the provider-scoped DNS resolver
-group, the Device/LineAsset ingress-binding transport, and strict
+group, request-scoped HTTPS DoH failures, the Device/LineAsset ingress-binding transport, and strict
 ``sing-box check`` pre-start validation, plus root-only observation of the
 business process's loaded input.
 """
@@ -29,7 +29,7 @@ SING_ANYTLS_VERSION = "v0.0.11"
 SING_BOX_COMMIT = "af6e64c3b69e6132ebaee0e1a3d24e93903f6709"
 SING_ANYTLS_COMMIT = "130d2e61b8895727bfed4942c535e91b246a9603"
 REPO_ROOT = Path(__file__).resolve().parent
-PATCH_ID = "rf-native-socks5-connect-v1"
+PATCH_ID = "rf-doh-request-scope-v1"
 FEATURE_UPSTREAM_ANYTLS_CLIENT_METADATA = "upstream_anytls_client_metadata"
 FEATURE_RF_DNS_RESOLVER_GROUP = "rf_dns_resolver_group"
 FEATURE_RF_INGRESS_BINDING = "rf_ingress_binding"
@@ -38,7 +38,8 @@ FEATURE_RF_NATIVE_CURRENT = "rf_native_current_root_observation"
 FEATURE_RF_ROUTE_CONNECTIONS = "rf_native_route_connections"
 FEATURE_RF_ACTIVITY = "rf_native_business_activity"
 FEATURE_RF_CONNECT_RESULTS = "rf_native_socks5_connect_results"
-PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.12"
+FEATURE_RF_DOH_REQUEST_SCOPE = "rf_doh_request_scope"
+PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.13"
 DEFAULT_TAGS = "with_utls with_clash_api"
 
 
@@ -349,6 +350,38 @@ def patch_sing_box(source_dir: Path) -> None:
         "\trfgroup.RegisterTransport(registry)\n",
     )
     copy_patch_file(source_dir, "dns/transport/rfgroup/rfgroup.go")
+    copy_patch_file(source_dir, "dns/transport/rf_https_request_test.go")
+    # One DoH request owns its stream. A deadline does not prove that the
+    # shared HTTP transport or concurrent queries need recovery/reset.
+    https_transport = source_dir / "dns/transport/https.go"
+    replace_once(https_transport, '\t"errors"\n', "")
+    replace_once(https_transport, '\t"time"\n', "")
+    replace_once(https_transport, "\ttransportResetAt time.Time\n", "")
+    replace_once(https_transport, "\tt.transportResetAt = time.Now()\n", "")
+    replace_once(
+        https_transport,
+        """func (t *HTTPSTransport) Exchange(ctx context.Context, message *mDNS.Msg) (*mDNS.Msg, error) {
+	startAt := time.Now()
+	response, err := t.exchange(ctx, message)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			t.transportAccess.Lock()
+			defer t.transportAccess.Unlock()
+			if t.transportResetAt.After(startAt) {
+				return nil, err
+			}
+			t.resetTransportLocked()
+		}
+		return nil, err
+	}
+	return response, nil
+}
+""",
+        """func (t *HTTPSTransport) Exchange(ctx context.Context, message *mDNS.Msg) (*mDNS.Msg, error) {
+	return t.exchange(ctx, message)
+}
+""",
+    )
     copy_patch_file(source_dir, "dns/transport/rfgroup/rfgroup_test.go")
     copy_patch_file(source_dir, "dns/transport/rfgroup/request_scope_test.go")
     copy_patch_file(source_dir, "dns/transport/rfbinding/rfbinding.go")
@@ -397,6 +430,8 @@ def build(args: argparse.Namespace) -> None:
         sing_box_dir / "option" / "options.go",
         sing_box_dir / "cmd" / "sing-box" / "cmd_check.go",
         sing_box_dir / "constant" / "dns.go",
+        sing_box_dir / "dns" / "transport" / "https.go",
+        sing_box_dir / "dns" / "transport" / "rf_https_request_test.go",
         sing_box_dir / "dns" / "transport" / "rfbinding" / "rfbinding.go",
         sing_box_dir / "dns" / "transport" / "rfbinding" / "rfbinding_test.go",
         sing_box_dir / "dns" / "transport" / "rfgroup" / "rfgroup.go",
@@ -433,6 +468,7 @@ def build(args: argparse.Namespace) -> None:
             FEATURE_RF_ROUTE_CONNECTIONS,
             FEATURE_RF_ACTIVITY,
             FEATURE_RF_CONNECT_RESULTS,
+            FEATURE_RF_DOH_REQUEST_SCOPE,
             FEATURE_UPSTREAM_ANYTLS_CLIENT_METADATA,
             FEATURE_RF_DNS_RESOLVER_GROUP,
             FEATURE_RF_INGRESS_BINDING,
