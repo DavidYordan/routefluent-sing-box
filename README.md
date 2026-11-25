@@ -1,6 +1,6 @@
 # RF sing-box
 
-RF 的受控制品构建仓库。它以固定的上游 sing-box 版本为基线，维护 RF 尚未被上游覆盖的 DNS 能力及业务进程的私有输入观察；AnyTLS 客户端元数据使用上游正式字段 `client_metadata`。
+RF 的受控制品构建仓库。它以固定的上游 sing-box 版本为基线，维护 RF 尚未被上游覆盖的 DNS 能力、普通TLS会话复用及业务进程的私有输入观察；AnyTLS 客户端元数据使用上游正式字段 `client_metadata`。
 
 该仓库会：
 
@@ -16,12 +16,16 @@ RF 的受控制品构建仓库。它以固定的上游 sing-box 版本为基线�
 | --- | --- |
 | sing-box | `v1.14.2` / `af6e64c3b69e6132ebaee0e1a3d24e93903f6709` |
 | sing-anytls（上游依赖） | `v0.0.11` / `130d2e61b8895727bfed4942c535e91b246a9603` |
-| RF patch id | `rf-native-business-activity-v1` |
-| 版本名 | `1.14.2-rf-dns.9` |
+| RF patch id | `rf-native-tls-session-cache-v1` |
+| 版本名 | `1.14.2-rf-dns.10` |
 | 默认 build tags | `with_utls with_clash_api` |
 | 目标 | `linux/amd64`, `CGO_ENABLED=0` |
 
 ## 能力边界
+
+### 普通TLS会话复用
+
+每份原生STD TLS配置持有自己的Go易失LRU会话缓存，其clone复用同一份缓存，独立配置分别持有信任及会话。缓存随配置和进程退出释放，不写票据文件、不跨配置或协议类型建立全局共享；TLS证书、SNI及代理协议原有验证继续由原生消费者处理。重复连接仍发送各自的代理认证，TLS复用不替代它。直接回归使用TLS 1.2／1.3真实服务验证复用、配置隔离及不可信证书拒绝。
 
 ### 业务进程的已加载输入
 
