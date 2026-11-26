@@ -29,7 +29,7 @@ SING_ANYTLS_VERSION = "v0.0.11"
 SING_BOX_COMMIT = "af6e64c3b69e6132ebaee0e1a3d24e93903f6709"
 SING_ANYTLS_COMMIT = "130d2e61b8895727bfed4942c535e91b246a9603"
 REPO_ROOT = Path(__file__).resolve().parent
-PATCH_ID = "rf-utls-session-v1"
+PATCH_ID = "rf-doh-message-scope-v1"
 FEATURE_UPSTREAM_ANYTLS_CLIENT_METADATA = "upstream_anytls_client_metadata"
 FEATURE_RF_DNS_RESOLVER_GROUP = "rf_dns_resolver_group"
 FEATURE_RF_INGRESS_BINDING = "rf_ingress_binding"
@@ -39,7 +39,7 @@ FEATURE_RF_ROUTE_CONNECTIONS = "rf_native_route_connections"
 FEATURE_RF_ACTIVITY = "rf_native_business_activity"
 FEATURE_RF_CONNECT_RESULTS = "rf_native_socks5_connect_results"
 FEATURE_RF_DOH_REQUEST_SCOPE = "rf_doh_request_scope"
-PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.15"
+PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.16"
 DEFAULT_TAGS = "with_utls with_clash_api"
 
 
@@ -358,10 +358,51 @@ def patch_sing_box(source_dir: Path) -> None:
     copy_patch_file(source_dir, "dns/transport/rfgroup/rfgroup.go")
     copy_patch_file(source_dir, "dns/transport/rf_https_request_test.go")
     copy_patch_file(source_dir, "dns/transport/rf_https_http1_test.go")
+    copy_patch_file(source_dir, "dns/transport/rf_https_size_test.go")
     copy_patch_file(source_dir, "dns/transport/rf_https_lifetime.go")
     # One DoH request owns its stream. A deadline does not prove that the
     # shared HTTP transport or concurrent queries need recovery/reset.
     https_transport = source_dir / "dns/transport/https.go"
+    # RFC 8484 section 6 bounds this first untrusted DNS wire message, not
+    # the shared transport. Preserve full valid messages and sibling streams.
+    replace_once(
+        https_transport,
+        'const MimeType = "application/dns-message"\n',
+        'const MimeType = "application/dns-message"\n\n// RFC 8484 section 6.\nconst rfHTTPSMaximumDNSMessage = 65535\n',
+    )
+    replace_once(
+        https_transport,
+        """\tvar responseMessage mDNS.Msg
+\tif response.ContentLength > 0 {
+\t\tresponseBuffer := buf.NewSize(int(response.ContentLength))
+\t\tdefer responseBuffer.Release()
+\t\t_, err = responseBuffer.ReadFullFrom(response.Body, int(response.ContentLength))
+\t\tif err != nil {
+\t\t\treturn nil, err
+\t\t}
+\t\terr = responseMessage.Unpack(responseBuffer.Bytes())
+\t} else {
+\t\trawMessage, err = io.ReadAll(response.Body)
+\t\tif err != nil {
+\t\t\treturn nil, err
+\t\t}
+\t\terr = responseMessage.Unpack(rawMessage)
+\t}
+""",
+        """\tif response.ContentLength > rfHTTPSMaximumDNSMessage {
+\t\treturn nil, E.New("DoH message exceeds 65535-byte wire limit")
+\t}
+\trawMessage, err = io.ReadAll(io.LimitReader(response.Body, rfHTTPSMaximumDNSMessage+1))
+\tif err != nil {
+\t\treturn nil, err
+\t}
+\tif len(rawMessage) > rfHTTPSMaximumDNSMessage {
+\t\treturn nil, E.New("DoH message exceeds 65535-byte wire limit")
+\t}
+\tvar responseMessage mDNS.Msg
+\terr = responseMessage.Unpack(rawMessage)
+""",
+    )
     replace_once(https_transport, '\t"errors"\n', "")
     replace_once(https_transport, '\t"time"\n', "")
     replace_once(https_transport, "\ttransportResetAt time.Time\n", "")
@@ -527,6 +568,7 @@ def build(args: argparse.Namespace) -> None:
         sing_box_dir / "dns" / "transport" / "rf_https_lifetime.go",
         sing_box_dir / "dns" / "transport" / "rf_https_request_test.go",
         sing_box_dir / "dns" / "transport" / "rf_https_http1_test.go",
+        sing_box_dir / "dns" / "transport" / "rf_https_size_test.go",
         sing_box_dir / "dns" / "transport" / "rfbinding" / "rfbinding.go",
         sing_box_dir / "dns" / "transport" / "rfbinding" / "rfbinding_test.go",
         sing_box_dir / "dns" / "transport" / "rfgroup" / "rfgroup.go",

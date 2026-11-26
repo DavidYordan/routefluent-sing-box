@@ -16,8 +16,8 @@ RF 的受控制品构建仓库。它以固定的上游 sing-box 版本为基线�
 | --- | --- |
 | sing-box | `v1.14.2` / `af6e64c3b69e6132ebaee0e1a3d24e93903f6709` |
 | sing-anytls（上游依赖） | `v0.0.11` / `130d2e61b8895727bfed4942c535e91b246a9603` |
-| RF patch id | `rf-utls-session-v1` |
-| 版本名 | `1.14.2-rf-dns.15` |
+| RF patch id | `rf-doh-message-scope-v1` |
+| 版本名 | `1.14.2-rf-dns.16` |
 | 默认 build tags | `with_utls with_clash_api` |
 | 目标 | `linux/amd64`, `CGO_ENABLED=0` |
 
