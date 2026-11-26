@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"slices"
+	"sync"
 	"sync/atomic"
 
 	"github.com/sagernet/sing-box/common/rfconnection"
@@ -17,7 +18,12 @@ import (
 
 // The observation follows the connection returned by the actual selection.
 // It never reads a selector's later Now() or changes routing or I/O deadlines.
-type rfSelection struct{ chain atomic.Pointer[[]string] }
+type rfSelection struct {
+	chain                          atomic.Pointer[[]string]
+	usageMu                        sync.Mutex
+	upload, download               *atomic.Int64
+	unboundUpload, unboundDownload int64
+}
 
 func (s *rfSelection) snapshot() []string {
 	if s != nil {
@@ -29,8 +35,27 @@ func (s *rfSelection) snapshot() []string {
 }
 
 func (s *rfSelection) store(chain []string) {
+	s.usageMu.Lock()
+	defer s.usageMu.Unlock()
+	if len(s.snapshot()) == 0 && len(chain) != 0 {
+		if s.upload != nil {
+			s.unboundUpload = s.upload.Load()
+		}
+		if s.download != nil {
+			s.unboundDownload = s.download.Load()
+		}
+	}
 	copy := slices.Clone(chain)
 	s.chain.Store(&copy)
+}
+
+func (s *rfSelection) usageScope(upload, download int64) ([]string, int64, int64) {
+	if s == nil {
+		return []string{}, 0, 0
+	}
+	s.usageMu.Lock()
+	defer s.usageMu.Unlock()
+	return s.snapshot(), min(upload, s.unboundUpload), min(download, s.unboundDownload)
 }
 
 type rfSelected interface{ RFSelectedChain() []string }

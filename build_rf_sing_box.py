@@ -39,7 +39,7 @@ FEATURE_RF_ROUTE_CONNECTIONS = "rf_native_route_connections"
 FEATURE_RF_ACTIVITY = "rf_native_business_activity"
 FEATURE_RF_CONNECT_RESULTS = "rf_native_socks5_connect_results"
 FEATURE_RF_DOH_REQUEST_SCOPE = "rf_doh_request_scope"
-PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.16"
+PATCHED_SING_BOX_VERSION = "1.14.2-rf-dns.17"
 DEFAULT_TAGS = "with_utls with_clash_api"
 
 
@@ -198,12 +198,22 @@ def patch_sing_box(source_dir: Path) -> None:
     replace_once(
         source_dir / "common/trafficcontrol/manager.go",
         "type Manager struct {\n",
-        "type Manager struct {\n\trfTrafficEpochID string\n\trfTrafficEpochError error\n",
+        "type Manager struct {\n\trfTrafficEpochID string\n\trfTrafficEpochError error\n\trfTrafficStartedAt time.Time\n\trfClosedTraffic map[string]RFActivityTotal\n",
     )
     replace_once(
         source_dir / "common/trafficcontrol/manager.go",
         "func NewManager(outbound adapter.OutboundManager) *Manager {\n\treturn &Manager{\n",
-        "func NewManager(outbound adapter.OutboundManager) *Manager {\n\tepoch, epochErr := uuid.NewV4()\n\treturn &Manager{\n\t\trfTrafficEpochID: epoch.String(),\n\t\trfTrafficEpochError: epochErr,\n",
+        "func NewManager(outbound adapter.OutboundManager) *Manager {\n\tepoch, epochErr := uuid.NewV4()\n\treturn &Manager{\n\t\trfTrafficEpochID: epoch.String(),\n\t\trfTrafficEpochError: epochErr,\n\t\trfTrafficStartedAt: time.Now().UTC(),\n",
+    )
+    replace_once(
+        source_dir / "common/trafficcontrol/manager.go",
+        "\t\tm.closedUploadTotal += evicted.Upload.Load()\n\t\tm.closedDownloadTotal += evicted.Download.Load()\n",
+        "\t\tupload, download := evicted.Upload.Load(), evicted.Download.Load()\n\t\tm.closedUploadTotal += upload\n\t\tm.closedDownloadTotal += download\n\t\tm.rfRetireTraffic(&evicted, upload, download)\n",
+    )
+    replace_once(
+        source_dir / "common/trafficcontrol/manager.go",
+        "\t\tm.closedUploadTotal += element.Value.Upload.Load()\n\t\tm.closedDownloadTotal += element.Value.Download.Load()\n",
+        "\t\tupload, download := element.Value.Upload.Load(), element.Value.Download.Load()\n\t\tm.closedUploadTotal += upload\n\t\tm.closedDownloadTotal += download\n\t\tmetadata := element.Value\n\t\tm.rfRetireTraffic(&metadata, upload, download)\n",
     )
     copy_patch_file(source_dir, "common/trafficcontrol/rf_epoch.go")
     copy_patch_file(source_dir, "common/trafficcontrol/rf_activity.go")
@@ -220,7 +230,7 @@ def patch_sing_box(source_dir: Path) -> None:
     replace_once(
         source_dir / "common/trafficcontrol/tracker.go",
         "\treturn TrackerMetadata{\n",
-        "\treturn TrackerMetadata{\n\t\trfSelection: &rfSelection{},\n",
+        "\treturn TrackerMetadata{\n\t\trfSelection: &rfSelection{upload: upload, download: download},\n",
     )
     replace_once(
         source_dir / "protocol/group/selector.go",
